@@ -398,8 +398,8 @@ const GLOB = {
   mu: 0.28, eta1: 0.55, eta2: 0.45, muMix: 0.12,
   // persuasiveness/credibility
   z0: 0.30, z1: 0.40, z2: 0.30, wc1: 0.5, wc2: 0.5, credWin: 3,
-  // attrition
-  // modulating states (set gains to 0 to recover the core dynamics)
+  // modulating states; use modulating:false to bypass their effects
+  // and recover the core dynamics
   betaE: 0.15, betaF: 0.30, betaR: 0.30,
   kapEF: 0.30, kapSL: 0.50, kapPhi: 0.30,
   lamE: 0.15, lamS: 0.10, lamV: 0.20, kapV: 18, s0: 2.0,
@@ -1175,9 +1175,23 @@ function plan(rev){
         trial=JSON.parse(JSON.stringify(c)); trial.scaffOn=false;
         if(ok(trial)){ c=trial; improved=true; }
       }
-      { const trial=JSON.parse(JSON.stringify(c));
-        trial.K=Math.max(4, trial.K-2);
-        if(ok(trial)){ c=trial; improved=true; } }
+      // Reduce capacity only when doing so strictly lowers the stated cost.
+      if(COST.capacity > 0 && c.K > COST.K0){
+        const trial=JSON.parse(JSON.stringify(c));
+
+        trial.K = Math.max(
+          COST.K0,
+          trial.K - 2
+        );
+
+        if(
+          controlCost(trial) < controlCost(c)
+          && ok(trial)
+        ){
+          c = trial;
+          improved = true;
+        }
+      }
       // If no lower-cost move is immediately feasible, explore nearby
       // event timings. A feasible timing move may open a later path to
       // further cost reductions.
