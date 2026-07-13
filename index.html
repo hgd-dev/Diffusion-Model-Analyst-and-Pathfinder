@@ -1075,12 +1075,51 @@ function spreadConfig(rev, startFraction, endFraction){
   return c;
 }
 
+function capacityCandidates(rev){
+  const ceiling = Math.max(
+    2,
+    Math.round(+rev.Kceil)
+  );
+
+  const floor = Math.min(
+    COST.K0,
+    ceiling
+  );
+
+  const values = [];
+
+  for(let K=floor; K<=ceiling; K+=2){
+    values.push(K);
+  }
+
+  if(values[values.length-1] !== ceiling){
+    values.push(ceiling);
+  }
+
+  return [...new Set(values)]
+    .sort((a,b)=>a-b);
+}
+
 function startingConfigs(rev){
-  return [
+  const templates = [
     maxConfig(rev),
     spreadConfig(rev, 0.10, 0.70),
     spreadConfig(rev, 0.25, 0.80)
   ];
+
+  const starts = [];
+
+  for(const K of capacityCandidates(rev)){
+    for(const template of templates){
+      const c =
+        JSON.parse(JSON.stringify(template));
+
+      c.K = K;
+      starts.push(c);
+    }
+  }
+
+  return starts;
 }
 function plan(rev){
   const tol = 0;
@@ -1306,7 +1345,7 @@ function instructions(c, rev, res){
   }
   steps.push({
     h:`Use capacity scale K ≈ ${c.K}`,
-    t:`K is the model's smooth congestion scale. Increasing K reduces capacity attenuation and cannot lower participation in the current equations. The present cost specification assigns no direct cost to capacity.`
+    t:`K is the model's smooth congestion scale. A larger K directly reduces current-period capacity attenuation, but terminal outcomes need not be monotone in K because realized participation also changes commitment, fatigue, reinforcement, and turnover. The planner therefore tests several admissible K values. The present cost specification assigns no direct cost to capacity.`
   });
   // bistability / outcome framing
   const term=terminalA(res.snaps), pk=peakA(res.snaps);
@@ -2273,15 +2312,15 @@ function doPlan(){
           <div class="ic">⚠</div>
           <div class="tx">
             <b>No feasible plan found by this search</b>
-            <span>The best ceiling-intensity starting configuration tested reaches approximately <b>${out.achieved.toFixed(1)}</b> active over the terminal window, below the ${(+S.rev.Astar).toFixed(1)} target. This does not prove that the target is structurally infeasible.</span>
+            <span>The best high-intensity starting configuration tested reaches approximately <b>${out.achieved.toFixed(1)}</b> active over the terminal window, below the ${(+S.rev.Astar).toFixed(1)} target. This does not prove that the target is structurally infeasible.</span>
           </div>
         </div>
         <ol class="steps">
           <li><div class="t"><b>Loosen a constraint.</b> Raise the visibility ceiling, allow more events, or permit early-weeks mentoring.</div></li>
           <li><div class="t"><b>Or shift regime.</b> A favorable regime with a lower quorum and stronger persistence parameters may reach higher turnout under the same control bounds.</div></li>
-          <li><div class="t"><b>Or lower the target.</b> The trajectory now showing is the best ceiling-intensity starting configuration tested by this run.</div></li>
+          <li><div class="t"><b>Or lower the target.</b> The trajectory now showing is the best high-intensity starting configuration tested by this run.</div></li>
         </ol>
-        <div class="note">The displayed run is the best of the ceiling-intensity starting configurations tested. The heuristic may still miss feasible schedules with other timings. Feasibility is judged by the final-four-week mean.</div>`;
+        <div class="note">The displayed run is the best of the high-intensity starting configurations tested. The heuristic may still miss feasible schedules with other timings. Feasibility is judged by the final-four-week mean.</div>`;
     } else {
       const ins=instructions(out.config, S.rev, out.res);
       let steps='';
