@@ -275,7 +275,7 @@
     <div class="vizcol">
       <div class="viz">
         <div class="vizhead">
-          <div class="ttl" id="vizttl">Network state &middot; week 0</div>
+          <div class="ttl" id="vizttl">Network state &middot; week 1</div>
           <div class="stats">
             <div class="stat"><div class="k">Turnout</div><div class="v" id="sA">0</div></div>
             <div class="stat"><div class="k">Mean motivation</div><div class="v" id="sM">0.00</div></div>
@@ -303,7 +303,7 @@
               <svg id="playicon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             </button>
             <div class="scrub">
-              <span class="wk" id="wklabel">wk 0 / 18</span>
+              <span class="wk" id="wklabel">wk 1 / 18</span>
               <input type="range" class="wide" id="scrub" min="0" max="17" value="0" step="1">
             </div>
           </div>
@@ -407,9 +407,11 @@ const GLOB = {
   // attrition
   kapDrop: 0.5,
   // modulating states (set gains to 0 to recover the core dynamics)
-  betaE: 0.15, betaEF: 0.30, kapEF: 0.30, kapSL: 0.50, kapPhi: 0.30,
+  betaE: 0.15, betaF: 0.30, betaR: 0.30,
+  kapEF: 0.30, kapSL: 0.50, kapPhi: 0.30,
   lamE: 0.15, lamS: 0.10, lamV: 0.20, kapV: 18, s0: 2.0,
-  zE: 0.30, zEp: 0.30
+  zE: 0.30, zEp: 0.30,
+  piO: 0.50, piF: 0.50
 };
 
 function buildNetwork(n, rng, struct) {
@@ -517,12 +519,35 @@ class Model {
         const simij = net.sim(i, j);
         const sameC = net.comm[i] === net.comm[j];
         const isAcq = net.acq && net.acq.has(j + "," + i);  // weak long-range tie
-        const base = isAcq
-          ? clip01(0.10 + 0.25 * simij + (rng() - 0.5) * 0.06)
-          : clip01((sameC ? 0.55 : 0.20) + 0.3 * simij + (rng() - 0.5) * 0.1);
-        const v0 = clip01(0.5 * base + 0.1);
+        const vmix0 = isAcq
+          ? clip01(
+              0.10
+              + 0.25 * simij
+              + (rng() - 0.5) * 0.06
+            )
+          : clip01(
+              (sameC ? 0.55 : 0.20)
+              + 0.30 * simij
+              + (rng() - 0.5) * 0.10
+            );
+        
+        const online0 = vmix0;
+        const offline0 = vmix0;
+        const v0 = clip01(0.5 * vmix0 + 0.1);
+        
         const idx = this.edges.length;
-        this.edges.push({ i, j, simij, base, v: v0, s: r.z0 + r.z1 * simij + r.z2 * 0.1, w: 0 });
+        
+        this.edges.push({
+          i,
+          j,
+          simij,
+          online: online0,
+          offline: offline0,
+          base: vmix0,
+          v: v0,
+          s: 0,
+          w: 0
+        });
         this.inEdges[i].push(idx);
       }
     }
@@ -578,37 +603,50 @@ class Model {
     let A = 0; for (let i = 0; i < n; i++) A += atil[i];
     this.aHist.push(atil.slice());
 
-    // weights and peer aggregates
-    this._refreshOmega(week);
-    const visAmp = new Array(n);
-    for (let j = 0; j < n; j++) visAmp[j] = 1 + G.visPeer * (gv - 1) * this.Vex[j];
-    const abarN = new Array(n).fill(0), ell = new Array(n).fill(0);
+    // Peer aggregates use the influence network already formed for time t.
+    // The current period's realized actions do not refresh credibility until
+    // the end of the period.
+    const abarN = new Array(n).fill(0);
+    const ell = new Array(n).fill(0);
     const wsum = new Array(n).fill(0);
+    
     for (const e of this.edges) {
-      const we = e.w * visAmp[e.j];
+      const we = e.w;
       abarN[e.i] += we * atil[e.j];
       wsum[e.i] += we;
       ell[e.i] += e.w;
     }
-    for (let i = 0; i < n; i++) abarN[i] = abarN[i] / (wsum[i] + G.eps0);
-
+    
+    for (let i = 0; i < n; i++) {
+      abarN[i] = abarN[i] / (wsum[i] + G.eps0);
+    }
+    
     // peer input
     const Xtil = new Array(n).fill(0);
     {
       const Xi = new Array(n).fill(0);
+    
       for (const e of this.edges) {
-        Xi[e.i] += e.w * visAmp[e.j] * this.b[e.j] * Math.tanh(G.kapG * this.m[e.j]);
+        Xi[e.i] +=
+          e.w
+          * this.b[e.j]
+          * Math.tanh(G.kapG * this.m[e.j]);
       }
-      for (let i = 0; i < n; i++) Xtil[i] = Xi[i] / (1 + this.rho[i] * Xi[i]);
+    
+      for (let i = 0; i < n; i++) {
+        Xtil[i] = Xi[i] / (1 + this.rho[i] * Xi[i]);
+      }
     }
+    this._refreshOmega(week + 1);
 
     // reinforcement terms
-    const nuE = (i) => 1 + G.betaEF * (0.5 - this.E[i]);
+    const nuF = (i) => 1 + G.betaF * (0.5 - this.E[i]);
+    const nuR = (i) => 1 - G.betaR * (0.5 - this.E[i]);
     const Ri = new Array(n).fill(0), Bi = new Array(n).fill(0);
     for (let i = 0; i < n; i++) {
       let pulse = 0;
       for (const ev of events) if (ev.week <= week) pulse += ev.amp * Math.exp(-G.lamR * (week - ev.week));
-      Ri[i] = G.eventGain * (1 - this.S[i]) * nuE(i) * r.Vev * pulse;
+      Ri[i] = G.eventGain * (1 - this.S[i]) * nuR(i) * r.Vev * pulse;
       const inWindow = scaff && week >= scaff.a && week <= scaff.b;
       const gB = inWindow ? scaff.gB : 1.0;
       const support = inWindow ? (gB - 1.0) * G.scaffReinf : 0.0;
@@ -616,7 +654,11 @@ class Model {
       const conc = this.beta[i] * (1 - Math.exp(-r.delta * y));
       const skip = (y <= 1e-9) ? this.chi[i] : 0;
       const aboveQuorum = A >= r.Nmin;
-      Bi[i] = nuE(i) * (aboveQuorum ? gB * (conc - skip) : -r.chiViab + support);
+      Bi[i] = nuR(i) * (
+        aboveQuorum
+          ? gB * conc - skip
+          : -r.chiViab + support
+      );
     }
 
     // decay and gain
@@ -639,11 +681,17 @@ class Model {
       mN[i] = clip01((1 - alpha[i]) * this.m[i] + gain * drive);
 
       const sat = (1 - G.kapSL * this.S[i]);
-      const targL = G.phi1 * atil[i] + G.phi2 * G.sRole * sat * abarN[i] + G.phi3 * nuE(i) * G.rPlus;
+      const targL =
+        G.phi1 * atil[i]
+        + G.phi2 * G.sRole * sat * abarN[i]
+        + G.phi3 * nuR(i) * G.rPlus;
       LN[i] = clip01(this.L[i] + G.lamL * (targL - this.L[i]));
 
       const y = atil[i];
-      const targF = nuE(i) * G.psi1 * y + nuE(i) * G.psi2 * abarN[i] + G.psi3 * (1 - atil[i]);
+      const targF =
+        nuF(i) * G.psi1 * y
+        + nuF(i) * G.psi2 * abarN[i]
+        + G.psi3 * (1 - atil[i]);
       FN[i] = clip01(this.F[i] + G.lamF * (targF - this.F[i]));
 
       if (this.modulating) {
@@ -653,17 +701,29 @@ class Model {
       else { EN[i] = this.E[i]; }
 
       if (this.modulating) {
-        const actGate = this.act[i] > 0.5 ? 1 : this.act[i];
+        const actGate = this.act[i];
         SN[i] = actGate * ((1 - G.lamS) * this.S[i] + G.lamS * (ell[i] / (ell[i] + G.s0)));
       }
       else { SN[i] = 0; }
     }
 
-    // visibility / Hebbian edge update
-    const hebbAmp = 1 + G.visHebb * (gv - 1);
+    // visibility update: gamma_v acts only through effective expressive reach
     for (const e of this.edges) {
-      const hebb = hebbAmp * G.eta1 * atil[e.i] * atil[e.j] + G.eta2 * (gv * this.Vex[e.j]) * p[e.j];
-      e.v = clip01((1 - G.mu) * e.v + G.mu * hebb + G.muMix * (e.base - e.v));
+      const vexEff = clip01(gv * this.Vex[e.j]);
+    
+      const adaptiveTarget =
+        G.eta1 * atil[e.i] * atil[e.j]
+        + G.eta2 * vexEff * p[e.j];
+    
+      const vmix =
+        G.piO * e.online
+        + G.piF * e.offline;
+    
+      e.v = clip01(
+        (1 - G.mu) * e.v
+        + G.mu * adaptiveTarget
+        + G.muMix * (vmix - e.v)
+      );
     }
 
     // attrition / reactivation
@@ -677,7 +737,6 @@ class Model {
       }
       else { this.act[i] = this.act[i] * (1 - pDrop) + (1 - this.act[i]) * pReact; }
     }
-    for (const e of this.edges) { if (this.act[e.j] < 0.5) { e.v = clip01(e.v * G.kapDrop); } }
 
     for (let i = 0; i < n; i++) {
       this.m[i] = mN[i]; this.L[i] = LN[i]; this.F[i] = FN[i];
@@ -746,19 +805,19 @@ const SEED = 11;
 const NET_H = 396, CHART_H = 188;   // canvas heights (CSS px)
 const DEF = {
   forward: { n:36, regime:"collapse", seed:SEED, T:18,
-    events:[{week:2,amp:0.30}], gv:3.5, K:14,
-    scaffOn:true, scaffA:2, scaffB:6, gB:1.8,
+    events:[{week:3,amp:0.30}], gv:3.5, K:14,
+    scaffOn:true, scaffA:3, scaffB:7, gB:1.8,
     groupSize:8, inTies:4, outTies:1.5, acquaint:0, body:220, trials:250 }
 };
 
 const PRESETS = {
   A:{ label:"A · Naive collapse", regime:"collapse",
-      events:[{week:2,amp:0.60}], gv:1, K:14, scaffOn:false, scaffA:2,scaffB:6,gB:1.8, groupSize:8, inTies:4, outTies:1.5, acquaint:0, body:220, trials:250 },
+      events:[{week:3,amp:0.60}], gv:1, K:14, scaffOn:false, scaffA:2,scaffB:6,gB:1.8, groupSize:8, inTies:4, outTies:1.5, acquaint:0, body:220, trials:250 },
   B:{ label:"B · Favorable & stable", regime:"stabilize",
-      events:[{week:2,amp:0.35},{week:6,amp:0.35},{week:10,amp:0.35}], gv:1.4, K:18,
+      events:[{week:3,amp:0.35},{week:7,amp:0.35},{week:11,amp:0.35}], gv:1.4, K:18,
       scaffOn:false, scaffA:2,scaffB:6,gB:1.8, groupSize:8, inTies:4, outTies:1.5, acquaint:0, body:220, trials:250 },
   C:{ label:"C · Reverse-planned rescue", regime:"collapse",
-      events:[{week:1,amp:0.45},{week:4,amp:0.45},{week:7,amp:0.45},{week:11,amp:0.45}], gv:3.0, K:20, scaffOn:true, scaffA:1,scaffB:8,gB:1.4, groupSize:8, inTies:4, outTies:1.5, acquaint:0, body:220, trials:250 }
+      events:[{week:2,amp:0.45},{week:5,amp:0.45},{week:8,amp:0.45},{week:12,amp:0.45}], gv:3.0, K:20, scaffOn:true, scaffA:2,scaffB:9,gB:1.4, groupSize:8, inTies:4, outTies:1.5, acquaint:0, body:220, trials:250 }
 };
 
 // app state
@@ -792,9 +851,19 @@ function cfgToOpts(c){
     n:c.n, regime:c.regime, seed:c.seed, T:c.T, stochastic:false, modulating:true,
     groupSize:+c.groupSize, inTies:+c.inTies, outTies:+c.outTies, acquaint:+c.acquaint,
     ctrl:{
-      events:c.events.map(e=>({week:+e.week,amp:+e.amp})),
-      gv:+c.gv, K:+c.K,
-      scaff: c.scaffOn ? {a:+c.scaffA,b:+c.scaffB,gB:+c.gB} : null
+      events: c.events.map(e => ({
+        week: Math.max(0, +e.week - 1),
+        amp: +e.amp
+      })),
+      gv: +c.gv,
+      K: +c.K,
+      scaff: c.scaffOn
+        ? {
+            a: Math.max(0, +c.scaffA - 1),
+            b: Math.max(0, +c.scaffB - 1),
+            gB: +c.gB
+          }
+        : null
     }
   };
 }
@@ -879,7 +948,14 @@ function buildLayout(model, w, h, poolCount){
 }
 
 // reverse planner
-const COST = { event:1.0, amp:2.2, gv:0.9, scaff:1.4 };
+const COST = {
+  event: 1.0,
+  amp: 2.2,
+  gv: 0.9,
+  scaff: 1.4,
+  capacity: 0.0,
+  K0: 14
+};
 
 function controlCost(c){
   let k = 0;
@@ -887,6 +963,7 @@ function controlCost(c){
   k += COST.amp * c.events.reduce((s,e)=>s+(+e.amp),0);
   k += COST.gv * Math.max(0,(+c.gv)-1);
   if(c.scaffOn) { k += COST.scaff * Math.max(0,(+c.gB)-1) * Math.max(1,(+c.scaffB-+c.scaffA+1)); }
+  k += COST.capacity * Math.max(0, (+c.K) - COST.K0);
   return k;
 }
 
@@ -900,13 +977,12 @@ function maxConfig(rev){
 }
 
 function plan(rev){
-  const tol = 0.35;                         // attendance tolerance around target
-  const now = ()=> (typeof performance!=="undefined" && performance.now) ? performance.now() : Date.now();
+  const tol = 0.35;
+  const searchRng = mulberry32(SEED + 1);
+  const simBudget = 400;
+  
   const maxC = maxConfig(rev);
-  const t0 = now();
   const maxRes = window.PDE.simulate(cfgToOpts(maxC));
-  const simMs = Math.max(0.4, now()-t0);
-  const simBudget = Math.max(50, Math.min(400, Math.round(520/simMs)));
   let simCount = 1;
   const maxTerm = terminalA(maxRes.snaps);
   if(maxTerm < rev.Astar - tol){
@@ -954,11 +1030,11 @@ function plan(rev){
   let bestCost = controlCost(best);
   for(let r=0;r<5 && simCount<simBudget;r++){
     const pert=JSON.parse(JSON.stringify(best));
-    pert.gv=Math.min(rev.gvCap, +(pert.gv+Math.random()*0.8).toFixed(2));
-    pert.events.forEach(e=> e.amp=Math.min(rev.ampCap,+(e.amp+Math.random()*0.12).toFixed(2)));
-    if(pert.scaffOn) pert.gB=Math.min(2.0,+(pert.gB+Math.random()*0.3).toFixed(2));
-    if(Math.random()<0.4 && pert.events.length<rev.maxEvents)
-      pert.events.push({week:1+Math.floor(Math.random()*8),amp:rev.ampCap*0.6});
+    pert.gv=Math.min(rev.gvCap, +(pert.gv+searchRng()*0.8).toFixed(2));
+    pert.events.forEach(e=> e.amp=Math.min(rev.ampCap,+(e.amp+searchRng()*0.12).toFixed(2)));
+    if(pert.scaffOn) pert.gB=Math.min(2.0,+(pert.gB+searchRng()*0.3).toFixed(2));
+    if(searchRng()<0.4 && pert.events.length<rev.maxEvents)
+      pert.events.push({week:1+Math.floor(searchRng()*8),amp:rev.ampCap*0.6});
     const cand=descend(pert);
     const cc=controlCost(cand);
     if(ok(cand) && cc<bestCost){ best=cand; bestCost=cc; }
@@ -1182,7 +1258,7 @@ function drawChart(weekIdx){
   }
   cctx.textAlign="center"; cctx.textBaseline="top";
   for(let t=0;t<T;t+=Math.ceil(T/9)){
-    cctx.fillText(t, xs(t), h-padB+6);
+    cctx.fillText(t + 1, xs(t), h-padB+6);
   }
 
   if(S.overlays.ref){
@@ -1278,8 +1354,13 @@ function updateStats(){
   document.getElementById("sM").textContent=mean(s.m).toFixed(2);
   document.getElementById("sAlive").innerHTML=String(members);
   document.getElementById("sReach").innerHTML=reach+'<small>%</small>';
-  document.getElementById("vizttl").textContent = S.resultMode==="ensemble" ? "Average network state · week "+S.week : "Network state · week "+S.week;
-  document.getElementById("wklabel").textContent="wk "+S.week+" / "+(S.res.snaps.length-1);
+  document.getElementById("vizttl").textContent =
+    S.resultMode === "ensemble"
+      ? "Average network state · week " + (S.week + 1)
+      : "Network state · week " + (S.week + 1);
+  
+  document.getElementById("wklabel").textContent =
+    "wk " + (S.week + 1) + " / " + S.res.snaps.length;
   document.getElementById("scrub").value=S.week;
 }
 
@@ -1316,7 +1397,13 @@ function computeRecruitment(snaps, cfg, poolCount){
   const perAttendee = 0.95 + bridgeBoost;
   const evPer       = 3.0  + bridgeBoost*1.8;
   for(let t=0;t<snaps.length;t++){
-    let ev=0; for(const e of cfg.events){ if(e.week<=t) ev += (+e.amp)*Math.exp(-(t-e.week)/2.5); }
+    let ev=0;
+    for (const e of cfg.events) {
+      const tau = +e.week - 1;
+      if (tau <= t) {
+        ev += (+e.amp) * Math.exp(-(t - tau) / 2.5);
+      }
+    }
     const drawn = snaps[t].A*perAttendee + ev*evPer;
     rec[t]=Math.min(poolCount, Math.round(Math.max(0,drawn)));
   }
@@ -1574,7 +1661,7 @@ function eventEditorHTML(events){
   let h='<div class="events" id="eventlist">';
   events.forEach((e,i)=>{
     h+=`<div class="ev" data-i="${i}">
-      <div class="mini"><span>wk</span><input type="number" min="0" max="52" value="${e.week}" data-f="week"></div>
+      <div class="mini"><span>wk</span><input type="number" min="1" max="52" value="${e.week}" data-f="week"></div>
       <div class="mini"><span>amp</span><input type="number" min="0" max="2" step="0.05" value="${e.amp}" data-f="amp"></div>
       <button class="del" title="remove">×</button></div>`;
   });
