@@ -637,7 +637,6 @@ class Model {
         Xtil[i] = Xi[i] / (1 + this.rho[i] * Xi[i]);
       }
     }
-    this._refreshOmega(week + 1);
 
     // reinforcement terms
     const nuF = (i) => 1 + G.betaF * (0.5 - this.E[i]);
@@ -849,7 +848,10 @@ const S = {
 function cfgToOpts(c){
   return {
     n:c.n, regime:c.regime, seed:c.seed, T:c.T, stochastic:false, modulating:true,
-    groupSize:+c.groupSize, inTies:+c.inTies, outTies:+c.outTies, acquaint:+c.acquaint,
+    groupSize: +(c.groupSize ?? 8),
+    inTies: +(c.inTies ?? 4),
+    outTies: +(c.outTies ?? 1.5),
+    acquaint: +(c.acquaint ?? 0),
     ctrl:{
       events: c.events.map(e => ({
         week: Math.max(0, +e.week - 1),
@@ -977,7 +979,7 @@ function maxConfig(rev){
 }
 
 function plan(rev){
-  const tol = 0.35;
+  const tol = 0;
   const searchRng = mulberry32(SEED + 1);
   const simBudget = 400;
   
