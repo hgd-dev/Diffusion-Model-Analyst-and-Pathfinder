@@ -1899,7 +1899,7 @@
                         net = model.net;
                     const cx = w / 2,
                         cy = h / 2;
-                    const R = Math.min(w, h) * 0.37; // active club cluster: compact, sits within the population
+                    const R = Math.min(w, h) * 0.37; // active collective cluster: compact, sits within the population
                     const byComm = {};
                     for (let i = 0; i < n; i++) {
                         (byComm[net.comm[i]] ||= []).push(i);
@@ -2575,7 +2575,7 @@
                     nctx.font = "700 12px ui-monospace,monospace";
                     nctx.textAlign = "center";
                     nctx.textBaseline = "middle";
-                    nctx.fillText("CLUB", L.cx, L.cy - 5);
+                    nctx.fillText("COLLECTIVE", L.cx, L.cy - 5);
                     nctx.fillStyle = "#ece9f5";
                     nctx.font = "700 14px ui-monospace,monospace";
                     nctx.fillText(Math.round(A), L.cx, L.cy + 9);
@@ -2846,7 +2846,7 @@
                         cctx.font = "700 9px ui-monospace,monospace";
                         cctx.textAlign = "left";
                         cctx.textBaseline = "bottom";
-                        cctx.fillText("student #" + (i + 1) + " · motivation (solid) · commitment (dashed)", padL + 4, padT + 10);
+                        cctx.fillText("Agent #" + (i + 1) + " · motivation (solid) · commitment (dashed)", padL + 4, padT + 10);
                     }
                     // playhead
                     const X = xs(weekIdx);
@@ -3370,7 +3370,7 @@
     </div>
     <div class="panel">
       <h2><span class="dot"></span>Setup</h2>
-      ${srow("Students (network size)","n",8,120,2,c.n)}
+      ${srow("Agents (network size)","n",8,120,2,c.n)}
       <div class="row"><label>Regime</label>
         <div class="seg" id="regime" style="width:260px">
           <button data-r="collapse" class="${c.regime==='collapse'?'on':''}">Collapse-prone</button>
@@ -3381,7 +3381,7 @@
     </div>
     <div class="panel">
       <h2><span class="dot"></span>Social network &amp; reach</h2>
-      <div class="hint">How students are connected, and how far the club can reach beyond its core.</div>
+      <div class="hint">How agents are connected, and how far the collective can reach beyond its core.</div>
       ${srow("Group size","groupSize",3,16,1,c.groupSize,"(communities)")}
       ${srow("Close ties","inTies",0,16,1,c.inTies,"(inside group)")}
       ${srow("Bridge ties","outTies",0,8,0.5, (+c.outTies).toFixed(1),"(across groups)")}
@@ -3654,7 +3654,7 @@
       ${ens?`<div class="costcard"><div class="k">Quorum rate</div><div class="v">${Math.round(ens.survivalRate*100)}%</div></div>`:''}
       ${ens?`<div class="costcard"><div class="k">IQR final</div><div class="v">${ens.q1Final.toFixed(1)}–${ens.q3Final.toFixed(1)}</div></div>`:''}
     </div>
-    <div class="note">${ens?`Averaged across <b>${ens.trials}</b> randomized network trials. The orange band on the chart is the middle 50% of trial outcomes. Press <b>Play</b> or scrub the timeline to inspect the average club state week by week; use <b>Run sample</b> to animate one concrete randomized network.`:'This is one randomized sample run. Press <b>Play</b> or scrub the timeline to watch motivation move through that network week by week.'}</div>`;
+    <div class="note">${ens?`Averaged across <b>${ens.trials}</b> randomized network trials. The orange band on the chart is the middle 50% of trial outcomes. Press <b>Play</b> or scrub the timeline to inspect the average collective state week by week; use <b>Run sample</b> to animate one concrete randomized network.`:'This is one randomized sample run. Press <b>Play</b> or scrub the timeline to watch motivation move through that network week by week.'}</div>`;
                 }
 
                 function wireReverse() {
@@ -3841,7 +3841,7 @@
                         return `<div class="nh">Illustrative public dot #${i+1} <em>wk ${S.week}</em></div>
       <div class="nr"><span>status</span><b style="color:${i<recN?'var(--good)':'var(--ink3)'}">${status}</b></div>
       <div class="nr"><span>source</span><b>${i<recN?'events / acquaintances':'not yet drawn in'}</b></div>
-      <div class="nr"><span>nearest core student</span><b>#${linked}</b></div>
+      <div class="nr"><span>nearest core agent</span><b>#${linked}</b></div>
       <div class="nr"><span>drawn-in count</span><b>${recN}</b></div>`;
                     }
                     const s = S.res.snaps[S.week],
@@ -3865,7 +3865,7 @@
                             color = "var(--ink3)";
                         }
                         else if (!enrolled) {
-                            status = "left the club";
+                            status = "left the collective";
                             color = "var(--bad)";
                         }
                         else {
@@ -3874,7 +3874,7 @@
                         }
                         attendText = joined ? (here ? 'yes' : 'no') + ' · ' + Math.round(attend * 100) + '%' : '—';
                     }
-                    return `<div class="nh">Student #${i+1} <em>wk ${S.week}</em></div>
+                    return `<div class="nh">Agent #${i+1} <em>wk ${S.week}</em></div>
     <div class="nr"><span><span class="swatch" style="background:${plasma(m)}"></span>motivation</span><b>${m.toFixed(2)}</b></div>
     <div class="nr"><span>commitment</span><b>${Lo.toFixed(2)}</b></div>
     <div class="nr"><span>fatigue</span><b>${F.toFixed(2)}</b></div>
