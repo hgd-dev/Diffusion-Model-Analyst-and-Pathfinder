@@ -259,7 +259,7 @@
     <div class="brand">
       <div class="eyebrow">Interactive Participation Dynamics Simulator</div>
       <h1>Diffusion Model Explorer</h1>
-      <div class="sub">An agent-based diffusion model of how a high school club grows, plateaus, or collapses across time and how a well-timed plan can rescue it. Each core node is a simulated student; hover over to see individual data.</div>
+      <div class="sub">An agent-based diffusion model (ABM) of how a collective grows, plateaus, or collapses across time and how a well-timed plan can rescue it. Each core node is a simulated agent; hover over to see individual data.</div>
     </div>
     <div class="modeseg" id="modeseg">
       <button data-mode="forward" class="on">Forward &middot; Predict</button>
@@ -321,7 +321,7 @@
   </div>
 
   <div class="foot">
-    Trajectories are illustrative qualitative regimes, not calibrated forecasts: headcounts are on the model's own scale,
+    Trajectories are illustrative qualitative regimes: headcounts are on the model's own scale,
     and the aim is to show which behaviors the network structure produces and how interventions move between them.
     <div class="cite">Based on <i>State-Dependent Participation Diffusion on Adaptive Influence Networks</i>, Hudson&nbsp;Dong.</div>
     <div class="bio">Full creation including ideation, website, code, and interface by Hudson Dong, Class of 2027, Stuyvesant High School, New York City.</div>
@@ -351,8 +351,8 @@ const negp = (x) => (x < 0 ? -x : 0);
 // Gaussian draw, clipped to [lo, hi].
 function gdraw(rng, mean, sd, lo = -Infinity, hi = Infinity) {
   let u = 1 - rng(), v = rng();
-  let z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-  let x = mean + sd * z;
+  let z = Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  let x = mean + sd*z;
   return Math.min(hi, Math.max(lo, x));
 }
 
@@ -409,25 +409,25 @@ const GLOB = {
 
 function buildNetwork(n, rng, struct) {
   struct = struct || {};
-  const groupSize = struct.groupSize || 8;          // typical friend-group size
-  const acquaint  = struct.acquaint  || 0;          // extra weak long-range ties
-  const inTies    = struct.inTies ?? Math.max(2, Math.round(groupSize * 0.5));
-  const outTies   = struct.outTies ?? 1.5;
-  const C = Math.max(2, Math.round(n / groupSize)); // number of communities
-  const kInBase = Math.max(0, Math.round(inTies));  // close/same-community ties per node
-  const kOutBase = Math.max(0, +outTies);           // bridge/cross-community ties per node
+  const groupSize = struct.groupSize || 8; // typical friend-group size
+  const acquaint = struct.acquaint || 0; // extra weak long-range ties
+  const inTies = struct.inTies ?? Math.max(2, Math.round(groupSize*0.5));
+  const outTies = struct.outTies ?? 1.5;
+  const C = Math.max(2, Math.round(n/groupSize)); // number of communities
+  const kInBase = Math.max(0, Math.round(inTies)); // close/same-community ties per node
+  const kOutBase = Math.max(0, +outTies); // bridge/cross-community ties per node
   const comm = new Array(n);
   const ang = new Array(n);
   for (let i = 0; i < n; i++) {
     comm[i] = i % C;
     // place within a community sector + jitter
-    const sector = (comm[i] / C) * 2 * Math.PI;
-    ang[i] = sector + (rng() - 0.5) * (2 * Math.PI / C) * 0.8;
+    const sector = (comm[i]/C)*2* Math.PI;
+    ang[i] = sector + (rng() - 0.5)*(2*Math.PI/C)*0.8;
   }
   const sim = (i, j) => {
     let d = Math.abs(ang[i] - ang[j]);
-    d = Math.min(d, 2 * Math.PI - d);
-    return Math.exp(-(d * d) / 0.6);
+    d = Math.min(d, 2*Math.PI - d);
+    return Math.exp(-(d*d) / 0.6);
   };
   // directed edges j -> i
   const inN = Array.from({ length: n }, () => []);
@@ -436,7 +436,7 @@ function buildNetwork(n, rng, struct) {
     const cand = [];
     for (let j = 0; j < n; j++) if (j !== i) cand.push([j, sim(i, j)]);
     cand.sort((a, b) => b[1] - a[1]);
-    const kIn = kInBase + Math.floor(rng() * 3);
+    const kIn = kInBase + Math.floor(rng()*3);
     let added = 0;
     for (const [j] of cand) {
       if (comm[j] === comm[i] && added < kIn) {
@@ -447,9 +447,9 @@ function buildNetwork(n, rng, struct) {
     }
     const nB = Math.floor(kOutBase) + (rng() < (kOutBase - Math.floor(kOutBase)) ? 1 : 0);
     let tries = 0, bridges = 0;
-    while (bridges < nB && tries < n * 3) {
+    while (bridges < nB && tries < n*3) {
       tries++;
-      const j = Math.floor(rng() * n);
+      const j = Math.floor(rng()*n);
       if (j !== i && comm[j] !== comm[i]) {
         const key = j + "," + i;
         if (!edgeSet.has(key)) { edgeSet.add(key); inN[i].push(j); bridges++; }
@@ -459,8 +459,8 @@ function buildNetwork(n, rng, struct) {
   // extra weak long-range ties
   const acq = new Set();
   for (let a = 0; a < acquaint; a++) {
-    const i = Math.floor(rng() * n);
-    const j = Math.floor(rng() * n);
+    const i = Math.floor(rng()*n);
+    const j = Math.floor(rng()*n);
     if (i === j) continue;
     const key = j + "," + i;
     if (!edgeSet.has(key)) { edgeSet.add(key); inN[i].push(j); acq.add(key); }
@@ -515,18 +515,18 @@ class Model {
         const vmix0 = isAcq
           ? clip01(
               0.10
-              + 0.25 * simij
-              + (rng() - 0.5) * 0.06
+              + 0.25*simij
+              + (rng() - 0.5)*0.06
             )
           : clip01(
               (sameC ? 0.55 : 0.20)
-              + 0.30 * simij
-              + (rng() - 0.5) * 0.10
+              + 0.30*simij
+              + (rng() - 0.5)*0.10
             );
         
         const online0 = vmix0;
         const offline0 = vmix0;
-        const v0 = clip01(0.5 * vmix0 + 0.1);
+        const v0 = clip01(0.5*vmix0 + 0.1);
         
         const idx = this.edges.length;
         
@@ -548,22 +548,22 @@ class Model {
   }
 
   cred(j, week) {
-    // cred_j = wc1 L_j + wc2 * mean recent a_tilde_j
+    // cred_j = wc1 L_j + wc2*mean recent a_tilde_j
     const G = this.G;
     let s = 0, cnt = 0;
     for (let k = Math.max(0, this.aHist.length - G.credWin); k < this.aHist.length; k++) {
       s += this.aHist[k][j]; cnt++;
     }
     const recA = cnt ? s / cnt : 0;
-    return clip01(G.wc1 * this.L[j] + G.wc2 * recA);
+    return clip01(G.wc1*this.L[j] + G.wc2*recA);
   }
 
   _refreshOmega(week = 0) {
     // persuasiveness (9) s_ij = z0 + z1 sim + z2 cred_j ; omega = clip(v*s) (7)
     for (const e of this.edges) {
       const credj = this.cred(e.j, week);
-      e.s = clip01(this.G.z0 + this.G.z1 * e.simij + this.G.z2 * credj);
-      e.w = clip01(e.v * e.s);
+      e.s = clip01(this.G.z0 + this.G.z1*e.simij + this.G.z2*credj);
+      e.w = clip01(e.v*e.s);
     }
   }
 
@@ -593,16 +593,16 @@ class Model {
     for (let i = 0; i < n; i++) {
       mhat[i] = clip01(
         this.m[i]
-        + (this.modulating ? G.betaE * (this.E[i] - 0.5) : 0)
+        + (this.modulating ? G.betaE*(this.E[i] - 0.5) : 0)
       );
-      Pa[i] = sigm(r.kapA * (mhat[i] - this.thetaA[i]));
-      Pp[i] = sigm(r.kapP * (mhat[i] - this.thetaP[i]));
+      Pa[i] = sigm(r.kapA*(mhat[i] - this.thetaA[i]));
+      Pp[i] = sigm(r.kapP*(mhat[i] - this.thetaP[i]));
       if (this.stochastic) {
-        a[i] = (this.rng() < Pa[i] ? 1 : 0) * (this.act[i] > 0.5 ? 1 : 0);
-        p[i] = (this.rng() < Pp[i] ? 1 : 0) * (this.act[i] > 0.5 ? 1 : 0);
+        a[i] = (this.rng() < Pa[i] ? 1 : 0)*(this.act[i] > 0.5 ? 1 : 0);
+        p[i] = (this.rng() < Pp[i] ? 1 : 0)*(this.act[i] > 0.5 ? 1 : 0);
       } else {
-        a[i] = Pa[i] * this.act[i];
-        p[i] = Pp[i] * this.act[i];
+        a[i] = Pa[i]*this.act[i];
+        p[i] = Pp[i]*this.act[i];
       }
     }
     // capacity scaling
@@ -621,7 +621,7 @@ class Model {
     
     for (const e of this.edges) {
       const we = e.w;
-      abarN[e.i] += we * atil[e.j];
+      abarN[e.i] += we*atil[e.j];
       wsum[e.i] += we;
       ell[e.i] += e.w;
     }
@@ -638,36 +638,36 @@ class Model {
       for (const e of this.edges) {
         Xi[e.i] +=
           e.w
-          * this.b[e.j]
-          * Math.tanh(G.kapG * this.m[e.j]);
+         *this.b[e.j]
+         *Math.tanh(G.kapG*this.m[e.j]);
       }
     
       for (let i = 0; i < n; i++) {
-        Xtil[i] = Xi[i] / (1 + this.rho[i] * Xi[i]);
+        Xtil[i] = Xi[i] / (1 + this.rho[i]*Xi[i]);
       }
     }
 
     // reinforcement terms
     const nuF = (i) =>
-      1 + (this.modulating ? G.betaF * (0.5 - this.E[i]) : 0);
+      1 + (this.modulating ? G.betaF*(0.5 - this.E[i]) : 0);
     
     const nuR = (i) =>
-      1 - (this.modulating ? G.betaR * (0.5 - this.E[i]) : 0);
+      1 - (this.modulating ? G.betaR*(0.5 - this.E[i]) : 0);
     const Ri = new Array(n).fill(0), Bi = new Array(n).fill(0);
     for (let i = 0; i < n; i++) {
       let pulse = 0;
-      for (const ev of events) if (ev.week <= week) pulse += ev.amp * Math.exp(-G.lamR * (week - ev.week));
-      Ri[i] = G.eventGain * (1 - this.S[i]) * nuR(i) * r.Vev * pulse;
+      for (const ev of events) if (ev.week <= week) pulse += ev.amp*Math.exp(-G.lamR*(week - ev.week));
+      Ri[i] = G.eventGain*(1 - this.S[i])*nuR(i)*r.Vev*pulse;
       const inWindow = scaff && week >= scaff.a && week <= scaff.b;
       const gB = inWindow ? scaff.gB : 1.0;
-      const support = inWindow ? (gB - 1.0) * G.scaffReinf : 0.0;
+      const support = inWindow ? (gB - 1.0)*G.scaffReinf : 0.0;
       const y = atil[i];
-      const conc = this.beta[i] * (1 - Math.exp(-r.delta * y));
+      const conc = this.beta[i]*(1 - Math.exp(-r.delta*y));
       const skip = (y <= 1e-9) ? this.chi[i] : 0;
       const aboveQuorum = A >= r.Nmin;
-      Bi[i] = nuR(i) * (
+      Bi[i] = nuR(i)*(
         aboveQuorum
-          ? gB * conc - skip
+          ? gB*conc - skip
           : -r.chiViab + support
       );
     }
@@ -677,78 +677,78 @@ class Model {
     for (let i = 0; i < n; i++) {
       Fhat[i] = clip01(
         this.F[i]
-        + (this.modulating ? G.kapEF * (0.5 - this.E[i]) : 0)
+        + (this.modulating ? G.kapEF*(0.5 - this.E[i]) : 0)
       );
-      const commitmentProtection = 1 - r.etaL * (1 - G.kapSL * this.S[i]) * this.L[i];
-      const fatigueAcceleration = 1 + r.etaF * Fhat[i];
-      alpha[i] = clip01(this.alpha0[i] * commitmentProtection * fatigueAcceleration);
+      const commitmentProtection = 1 - r.etaL*(1 - G.kapSL*this.S[i])*this.L[i];
+      const fatigueAcceleration = 1 + r.etaF*Fhat[i];
+      alpha[i] = clip01(this.alpha0[i]*commitmentProtection*fatigueAcceleration);
     }
-    const Gphi = (i) => 1 + G.kapPhi * (1 - 2 * this.Phi[i]);
+    const Gphi = (i) => 1 + G.kapPhi*(1 - 2*this.Phi[i]);
 
     // advance states
     const mN = new Array(n), LN = new Array(n), FN = new Array(n),
           EN = new Array(n), SN = new Array(n);
     for (let i = 0; i < n; i++) {
-      const drive = G.peerScale * this.wP[i] * (1 - this.S[i]) * Xtil[i] + this.cAvail[i] * Ri[i] + Bi[i] + (this.stochastic ? (this.rng() - 0.5) * 0.02 : 0);
+      const drive = G.peerScale*this.wP[i]*(1 - this.S[i])*Xtil[i] + this.cAvail[i]*Ri[i] + Bi[i] + (this.stochastic ? (this.rng() - 0.5)*0.02 : 0);
       const gain = this.modulating ? Gphi(i) : 1;
-      mN[i] = clip01((1 - alpha[i]) * this.m[i] + gain * drive);
+      mN[i] = clip01((1 - alpha[i])*this.m[i] + gain*drive);
 
-      const sat = (1 - G.kapSL * this.S[i]);
+      const sat = (1 - G.kapSL*this.S[i]);
       const targL =
-        G.phi1 * atil[i]
-        + G.phi2 * G.sRole * sat * abarN[i]
-        + G.phi3 * nuR(i) * G.rPlus;
-      LN[i] = clip01(this.L[i] + G.lamL * (targL - this.L[i]));
+        G.phi1*atil[i]
+        + G.phi2*G.sRole*sat*abarN[i]
+        + G.phi3*nuR(i)*G.rPlus;
+      LN[i] = clip01(this.L[i] + G.lamL*(targL - this.L[i]));
 
       const y = atil[i];
       const targF =
-        nuF(i) * G.psi1 * y
-        + nuF(i) * G.psi2 * abarN[i]
-        + G.psi3 * (1 - atil[i]);
-      FN[i] = clip01(this.F[i] + G.lamF * (targF - this.F[i]));
+        nuF(i)*G.psi1*y
+        + nuF(i)*G.psi2*abarN[i]
+        + G.psi3*(1 - atil[i]);
+      FN[i] = clip01(this.F[i] + G.lamF*(targF - this.F[i]));
 
       if (this.modulating) {
-        const shock = this.stochastic ? (this.rng() - 0.5) * 0.1 : 0;
-        EN[i] = clip01((1 - G.lamE) * this.E[i] + G.lamE * this.Ebar[i] + G.zE * posp(Bi[i]) - G.zEp * negp(Bi[i]) + shock);
+        const shock = this.stochastic ? (this.rng() - 0.5)*0.1 : 0;
+        EN[i] = clip01((1 - G.lamE)*this.E[i] + G.lamE*this.Ebar[i] + G.zE*posp(Bi[i]) - G.zEp*negp(Bi[i]) + shock);
       }
       else { EN[i] = this.E[i]; }
 
       if (this.modulating) {
         const actGate = this.act[i];
-        SN[i] = actGate * ((1 - G.lamS) * this.S[i] + G.lamS * (ell[i] / (ell[i] + G.s0)));
+        SN[i] = actGate*((1 - G.lamS)*this.S[i] + G.lamS*(ell[i] / (ell[i] + G.s0)));
       }
       else { SN[i] = 0; }
     }
 
     // visibility update: gamma_v acts only through effective expressive reach
     for (const e of this.edges) {
-      const vexEff = clip01(gv * this.Vex[e.j]);
+      const vexEff = clip01(gv*this.Vex[e.j]);
     
       const adaptiveTarget =
-        G.eta1 * atil[e.i] * atil[e.j]
-        + G.eta2 * vexEff * p[e.j];
+        G.eta1*atil[e.i]*atil[e.j]
+        + G.eta2*vexEff*p[e.j];
     
       const vmix =
-        G.piO * e.online
-        + G.piF * e.offline;
+        G.piO*e.online
+        + G.piF*e.offline;
     
       e.v = clip01(
-        (1 - G.mu) * e.v
-        + G.mu * adaptiveTarget
-        + G.muMix * (vmix - e.v)
+        (1 - G.mu)*e.v
+        + G.mu*adaptiveTarget
+        + G.muMix*(vmix - e.v)
       );
     }
 
     // attrition / reactivation
     for (let i = 0; i < n; i++) {
-      const h = this.h0[i] * Math.exp(-r.g1 * this.m[i] - r.g2 * this.L[i] + r.g3 * this.F[i]);
+      const h = this.h0[i]*Math.exp(-r.g1*this.m[i] - r.g2*this.L[i] + r.g3*this.F[i]);
       const pDrop = 1 - Math.exp(-h);
-      const pReact = 1 - Math.exp(-r.xi1 * Ri[i] - r.xi2 * abarN[i]);
+      const pReact = 1 - Math.exp(-r.xi1*Ri[i] - r.xi2*abarN[i]);
       if (this.stochastic) {
         if (this.act[i] > 0.5) { if (this.rng() < pDrop) this.act[i] = 0; }
         else { if (this.rng() < pReact) this.act[i] = 1; }
       }
-      else { this.act[i] = this.act[i] * (1 - pDrop) + (1 - this.act[i]) * pReact; }
+      else { this.act[i] = this.act[i]*(1 - pDrop) + (1 - this.act[i])*pReact; }
     }
 
     for (let i = 0; i < n; i++) {
@@ -756,9 +756,9 @@ class Model {
       this.E[i] = EN[i]; this.S[i] = SN[i];
     }
     for (let i = 0; i < n; i++) {
-      this.mbar[i] = (1 - G.lamV) * this.mbar[i] + G.lamV * this.m[i];
-      this.mvar[i] = (1 - G.lamV) * this.mvar[i] + G.lamV * (this.m[i] - this.mbar[i]) ** 2;
-      this.Phi[i] = 1/(1 + G.kapV * this.mvar[i]);
+      this.mbar[i] = (1 - G.lamV)*this.mbar[i] + G.lamV*this.m[i];
+      this.mvar[i] = (1 - G.lamV)*this.mvar[i] + G.lamV*(this.m[i] - this.mbar[i]) ** 2;
+      this.Phi[i] = 1/(1 + G.kapV*this.mvar[i]);
     }
     this._refreshOmega(week + 1);
 
@@ -954,7 +954,7 @@ function buildLayout(model, w, h, poolCount){
       idx
     }))
     .sort((a, b) => b.w - a.w)
-    .slice(0, Math.round(n * 1.6));
+    .slice(0, Math.round(n*1.6));
   poolCount = poolCount||0;
   const pool=[];
   const clearR = R*0.96 + 8;
@@ -965,7 +965,7 @@ function buildLayout(model, w, h, poolCount){
     const x = 7 + u*(w - 14), y = 7 + v*(h - 14);
     if(Math.hypot(x - cx, y - cy) < clearR) continue;
     const ds = [];
-    for(let i = 0; i < n; i++){ ds.push([i,(pos[i].x - x)**2 + (pos[i].y - y)**2]); }
+    for(let i = 0; i < n; i++){ ds.push([i, (pos[i].x - x)**2 + (pos[i].y - y)**2]); }
     ds.sort((a,b)=>a[1] - b[1]);
     const near = ds.slice(0,3).map(d=>d[0]);
     const di = pool.length;
@@ -991,11 +991,11 @@ const COST = {
 
 function controlCost(c){
   let k = 0;
-  k += COST.event * c.events.length;
-  k += COST.amp * c.events.reduce((s,e)=>s+(+e.amp),0);
-  k += COST.gv * Math.max(0,(+c.gv)-1);
-  if(c.scaffOn) { k += COST.scaff * Math.max(0,(+c.gB)-1) * Math.max(1,(+c.scaffB-+c.scaffA+1)); }
-  k += COST.capacity * Math.max(0, (+c.K) - COST.K0);
+  k += COST.event*c.events.length;
+  k += COST.amp*c.events.reduce((s,e)=>s+(+e.amp),0);
+  k += COST.gv*Math.max(0, (+c.gv)-1);
+  if(c.scaffOn) { k += COST.scaff*Math.max(0, (+c.gB)-1)*Math.max(1, (+c.scaffB-+c.scaffA+1)); }
+  k += COST.capacity*Math.max(0, (+c.K) - COST.K0);
   return k;
 }
 function maxConfig(rev){
@@ -1005,7 +1005,7 @@ function maxConfig(rev){
   for(let k=0; k<m; k++){
     wks.push({
       week:1 + Math.round(
-        k * Math.min(rev.T - 2, 12) / Math.max(1, m)
+        k*Math.min(rev.T - 2, 12) / Math.max(1, m)
       ),
       amp:rev.ampCap
     });
@@ -1044,11 +1044,11 @@ function spreadConfig(rev, startFraction, endFraction){
     );
 
   const startWeek =
-    clampWeek(startFraction * lastUsefulWeek);
+    clampWeek(startFraction*lastUsefulWeek);
 
   const endWeek = Math.max(
     startWeek,
-    clampWeek(endFraction * lastUsefulWeek)
+    clampWeek(endFraction*lastUsefulWeek)
   );
 
   c.events = [];
@@ -1064,7 +1064,7 @@ function spreadConfig(rev, startFraction, endFraction){
       c.events.push({
         week:clampWeek(
           startWeek
-          + k * (endWeek - startWeek) / (m - 1)
+          + k*(endWeek - startWeek) / (m - 1)
         ),
         amp:rev.ampCap
       });
@@ -1443,7 +1443,7 @@ function drawNetwork(snap, t){
     if(S.hoverType==="pool" && S.hoverNode===k){
       nctx.save(); nctx.shadowColor="rgba(255,255,255,.85)"; nctx.shadowBlur=10;
       nctx.strokeStyle="#ffffff"; nctx.lineWidth=2;
-      nctx.beginPath(); nctx.arc(p.x,p.y,(p.recruited?7.4:5.6),0,7); nctx.stroke(); nctx.restore();
+      nctx.beginPath(); nctx.arc(p.x,p.y, (p.recruited?7.4:5.6),0,7); nctx.stroke(); nctx.restore();
     }
     if(p.recruited){
       nctx.globalAlpha=0.92; nctx.fillStyle="#c79ce0";
@@ -1468,10 +1468,10 @@ function drawNetwork(snap, t){
   
     const a =
       (act ? 0.34 : 0.07)
-      * clamp(ew * 1.4, 0.12, 1);
+     *clamp(ew*1.4, 0.12, 1);
   
     nctx.strokeStyle = "rgba(150,140,200," + a + ")";
-    nctx.lineWidth = act ? 0.6 + ew * 1.4 : 0.5;
+    nctx.lineWidth = act ? 0.6 + ew*1.4 : 0.5;
     nctx.beginPath(); nctx.moveTo(pa.x,pa.y); nctx.lineTo(pb.x,pb.y); nctx.stroke();
   }
   const A = snap.A;
@@ -1513,7 +1513,7 @@ function drawNetwork(snap, t){
     }
     const r  = 2.6 + em*(baseR-2.6);
     const col= emColor(m, em);
-    const pa = (0.55 + 0.45*em) * (0.5 + 0.5*clamp(attend*1.5,0,1));
+    const pa = (0.55 + 0.45*em)*(0.5 + 0.5*clamp(attend*1.5,0,1));
     if(em>0.6 && m>0.55 && attend>0.3){
       nctx.globalAlpha=(m-0.55)*0.5*attend*em;
       nctx.fillStyle=plasma(m); nctx.beginPath(); nctx.arc(p.x,p.y,r+5,0,7); nctx.fill();
@@ -1656,7 +1656,7 @@ function updateStats(){
   
   const reach =
     Math.round(
-      s.m.filter(x => x > 0.4).length / n * 100
+      s.m.filter(x => x > 0.4).length / n*100
     );
   
   document.getElementById("sA").textContent =
@@ -1707,7 +1707,7 @@ function ambient(ts){
 // simulation runners
 function computeRecruitment(snaps, cfg, poolCount){
   const rec=new Array(snaps.length);
-  const bridgeBoost = (+cfg.outTies||0) * 0.35 + (+cfg.acquaint||0)*0.07;
+  const bridgeBoost = (+cfg.outTies||0)*0.35 + (+cfg.acquaint||0)*0.07;
   const perAttendee = 0.95 + bridgeBoost;
   const evPer       = 3.0  + bridgeBoost*1.8;
   for(let t=0;t<snaps.length;t++){
@@ -1715,7 +1715,7 @@ function computeRecruitment(snaps, cfg, poolCount){
     for (const e of cfg.events) {
       const tau = +e.week - 1;
       if (tau <= t) {
-        ev += (+e.amp) * Math.exp(-(t - tau) / 2.5);
+        ev += (+e.amp)*Math.exp(-(t - tau) / 2.5);
       }
     }
     const drawn = snaps[t].A*perAttendee + ev*evPer;
@@ -1727,7 +1727,7 @@ function prepRunResult(res, cfg){
   const n=res.model.n, joinTH=0.4;
   res.joined=new Array(n).fill(Infinity);
   res.snaps.forEach((s,t)=>{ for(let i=0;i<n;i++){ if(res.joined[i]===Infinity && s.Pa && s.Pa[i]>joinTH) res.joined[i]=t; } });
-  const outside=Math.max(0,(+cfg.body||0)-n);
+  const outside=Math.max(0, (+cfg.body||0)-n);
   res.layout=buildLayout(res.model, netcv.clientWidth||760, NET_H, outside);
   res.recruit=computeRecruitment(res.snaps, cfg, res.layout.pool.length);
   return res;
@@ -1750,7 +1750,7 @@ function averageRuns(runs, cfg){
   const T=runs[0].snaps.length, n=runs[0].model.n;
   const fields=["m","L","F","E","S","act","Pa","atil","alpha","Phi"];
   const snaps=[];
-  const AByWeek=Array.from({length:T},()=>[]);
+  const AByWeek=Array.from({length:T}, ()=>[]);
   for(let t=0;t<T;t++){
     const snap={week:t,A:0};
     for(const f of fields) snap[f]=new Array(n).fill(0);
@@ -1815,7 +1815,7 @@ function setProgress(done,total,runs){
       mean(finals).toFixed(1);
     
     document.getElementById("progsurv").textContent =
-      Math.round(rate * 100) + "%";
+      Math.round(rate*100) + "%";
   }
 }
 function runSampleSimulation(){
@@ -1946,7 +1946,7 @@ async function runPlanEnsemble(){
   setPlanStatus(
     `<div class="dirtyflag">` +
     `Showing the proposed plan averaged across <b>${ens.trials}</b> randomized networks. ` +
-    `Terminal-target attainment rate: <b>${Math.round(targetRate * 100)}%</b>. ` +
+    `Terminal-target attainment rate: <b>${Math.round(targetRate*100)}%</b>. ` +
     `Scrub or play the timeline to inspect average weekly states.` +
     `</div>`
   );
@@ -1990,13 +1990,13 @@ function srow(label, id, min, max, step, v, sub){
 function wireSrow(id, fmt, onset){
   const s=document.getElementById(id), b=document.getElementById(id+"v");
   if(!s||!b) return;
-  s.addEventListener("input",()=>{ b.value = fmt?fmt(s.value):s.value; onset&&onset(s.value); });
-  b.addEventListener("input",()=>{
+  s.addEventListener("input", ()=>{ b.value = fmt?fmt(s.value):s.value; onset&&onset(s.value); });
+  b.addEventListener("input", ()=>{
     let x=parseFloat(b.value); if(isNaN(x)) return;
     const mn=parseFloat(s.min), mx=parseFloat(s.max);
     x=Math.max(mn,Math.min(mx,x)); s.value=x; onset&&onset(s.value);
   });
-  b.addEventListener("change",()=>{ b.value = fmt?fmt(s.value):s.value; }); // snap to clamped on blur
+  b.addEventListener("change", ()=>{ b.value = fmt?fmt(s.value):s.value; }); // snap to clamped on blur
 }
 
 function eventEditorHTML(events){
@@ -2054,7 +2054,7 @@ function buildForward(){
       <div class="hint">How students are connected, and how far the club can reach beyond its core.</div>
       ${srow("Friend-group size","groupSize",3,16,1,c.groupSize,"(communities)")}
       ${srow("Close ties / student","inTies",0,16,1,c.inTies,"(inside group)")}
-      ${srow("Bridge ties / student","outTies",0,8,0.5,(+c.outTies).toFixed(1),"(across groups)")}
+      ${srow("Bridge ties / student","outTies",0,8,0.5, (+c.outTies).toFixed(1),"(across groups)")}
       ${srow("Extra acquaintance ties","acquaint",0,40,1,c.acquaint,"(global weak ties)")}
       ${srow("Illustrative public dots","body",0,700,10,c.body,"(display only)")}
       <div class="hint" style="margin-top:8px">Close ties stay inside friend groups; bridge ties jump between groups. Both are randomized each run.</div>
@@ -2064,7 +2064,7 @@ function buildForward(){
       <div class="hint">Kickoffs, showcases, socials — each gives a decaying enthusiasm pulse.</div>
       ${eventEditorHTML(c.events)}
       <div style="margin-top:14px">
-        ${srow("Visibility&nbsp;γ<sub>v</sub>","gv",1,8,0.1,(+c.gv).toFixed(1),"(promotion)")}
+        ${srow("Visibility&nbsp;γ<sub>v</sub>","gv",1,8,0.1, (+c.gv).toFixed(1),"(promotion)")}
         ${srow("Capacity scale&nbsp;K","K",2,100,1,c.K,"(smooth congestion)")}
       </div>
     </div>
@@ -2078,7 +2078,7 @@ function buildForward(){
             <input type="number" class="valbox" id="scaffA" min="0" max="52" value="${c.scaffA}">
             <span style="color:var(--ink3)">to</span>
             <input type="number" class="valbox" id="scaffB" min="0" max="52" value="${c.scaffB}"></span></div>
-        ${srow("Mentoring strength&nbsp;γ<sub>B</sub>","gB",1,3,0.05,(+c.gB).toFixed(2))}
+        ${srow("Mentoring strength&nbsp;γ<sub>B</sub>","gB",1,3,0.05, (+c.gB).toFixed(2))}
       </div>
     </div>
     <div class="panel" id="outpanel" style="margin-top:16px"></div>`;
@@ -2093,7 +2093,7 @@ function buildReverse(){
     <div class="panel">
       <h2><span class="dot"></span>Goal</h2>
       <div class="hint">Set a final-four-week attendance target; the heuristic searches for a low-cost feasible plan.</div>
-      ${srow("Target terminal-window attendance","Astar",1,60,0.5,(+r.Astar).toFixed(1))}
+      ${srow("Target terminal-window attendance","Astar",1,60,0.5, (+r.Astar).toFixed(1))}
       <div class="row"><label>Regime</label>
         <div class="seg" id="rregime" style="width:260px">
           <button data-r="collapse" class="${r.regime==='collapse'?'on':''}">Collapse-prone</button>
@@ -2120,8 +2120,8 @@ function buildReverse(){
     <div class="panel">
       <h2><span class="dot"></span>What you're willing to spend</h2>
       ${srow("Max events","maxEvents",0,12,1,r.maxEvents)}
-      ${srow("Max event intensity","ampCap",0.1,1.5,0.05,(+r.ampCap).toFixed(2))}
-      ${srow("Max visibility γ<sub>v</sub>","gvCap",1,8,0.1,(+r.gvCap).toFixed(1))}
+      ${srow("Max event intensity","ampCap",0.1,1.5,0.05, (+r.ampCap).toFixed(2))}
+      ${srow("Max visibility γ<sub>v</sub>","gvCap",1,8,0.1, (+r.gvCap).toFixed(1))}
       ${srow("Room capacity ceiling","Kceil",2,100,1,r.Kceil)}
       <div class="row"><label class="toggle"><input type="checkbox" id="scaffAllow" ${r.scaffAllow?'checked':''}><span class="sw"></span>Allow early-weeks mentoring</label></div>
     </div>
@@ -2156,7 +2156,7 @@ function wireForward(){
   wireSrow("acquaint",null,markDirty); wireSrow("body",null,markDirty); wireSrow("trials",null,markDirty);
   ["scaffA","scaffB"].forEach(id=>{ const el=document.getElementById(id);
     if(el) el.addEventListener("input",markDirty); });
-  controls.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click",()=>{
+  controls.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click", ()=>{
     const p=PRESETS[b.dataset.preset];
     S.cfg=Object.assign(JSON.parse(JSON.stringify(DEF.forward)),{
       regime:p.regime, events:JSON.parse(JSON.stringify(p.events)), gv:p.gv, K:p.K,
@@ -2164,7 +2164,7 @@ function wireForward(){
       groupSize:p.groupSize, inTies:p.inTies, outTies:p.outTies, acquaint:p.acquaint, body:p.body, trials:p.trials });
     buildForward();
   }));
-  controls.querySelectorAll("#regime button").forEach(b=>b.addEventListener("click",()=>{
+  controls.querySelectorAll("#regime button").forEach(b=>b.addEventListener("click", ()=>{
     controls.querySelectorAll("#regime button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); S.cfg.regime=b.dataset.r; markDirty();
   }));
@@ -2179,8 +2179,8 @@ function wireForward(){
 }
 function wireEvents(){
   const add=document.getElementById("addev");
-  if(add) add.addEventListener("click",()=>{ readForwardCfg(); S.cfg.events.push({week:4,amp:0.3}); S.dirty=true; buildForward(); });
-  document.querySelectorAll("#eventlist .del").forEach(b=>b.addEventListener("click",()=>{
+  if(add) add.addEventListener("click", ()=>{ readForwardCfg(); S.cfg.events.push({week:4,amp:0.3}); S.dirty=true; buildForward(); });
+  document.querySelectorAll("#eventlist .del").forEach(b=>b.addEventListener("click", ()=>{
     readForwardCfg(); const i=+b.closest(".ev").dataset.i; S.cfg.events.splice(i,1); S.dirty=true; buildForward(); }));
   document.querySelectorAll("#eventlist .ev input").forEach(inp=>inp.addEventListener("input",markDirty));
 }
@@ -2249,13 +2249,13 @@ function renderForwardOutcome(){
 }
 
 function wireReverse(){
-  wireSrow("Astar",v=>(+v).toFixed(1),()=>{ markPlanDirty(); S.refLines.Astar=+val("Astar"); if(S.res) drawChart(S.week); });
+  wireSrow("Astar",v=>(+v).toFixed(1), ()=>{ markPlanDirty(); S.refLines.Astar=+val("Astar"); if(S.res) drawChart(S.week); });
   wireSrow("rT",null,markPlanDirty);
   wireSrow("maxEvents",null,markPlanDirty);
   wireSrow("ampCap",v=>(+v).toFixed(2),markPlanDirty);
   wireSrow("gvCap",v=>(+v).toFixed(1),markPlanDirty);
   wireSrow("Kceil",null,markPlanDirty);
-  controls.querySelectorAll("#rregime button").forEach(b=>b.addEventListener("click",()=>{
+  controls.querySelectorAll("#rregime button").forEach(b=>b.addEventListener("click", ()=>{
     controls.querySelectorAll("#rregime button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); S.rev.regime=b.dataset.r; markPlanDirty();
   }));
@@ -2304,7 +2304,7 @@ function doPlan(){
     S.res=out.res;
     { const n=out.res.model.n, jt=0.4; out.res.joined=new Array(n).fill(Infinity);
       out.res.snaps.forEach((s,t)=>{ for(let i=0;i<n;i++){ if(out.res.joined[i]===Infinity && s.Pa && s.Pa[i]>jt) out.res.joined[i]=t; } });
-      const outside=Math.max(0,(+displayPlanCfg.body||0)-n);
+      const outside=Math.max(0, (+displayPlanCfg.body||0)-n);
       S.res.layout=buildLayout(out.res.model, netcv.clientWidth||760, NET_H, outside); }
     S.res.recruit=computeRecruitment(S.res.snaps, displayPlanCfg, S.res.layout.pool.length);
     S.refLines.Nmin=window.PDE.REGIMES[S.rev.regime].Nmin; S.refLines.Astar=S.rev.Astar;
@@ -2353,7 +2353,7 @@ function doPlan(){
 }
 
 // global events
-document.querySelectorAll("#modeseg button").forEach(b=>b.addEventListener("click",()=>{
+document.querySelectorAll("#modeseg button").forEach(b=>b.addEventListener("click", ()=>{
   document.querySelectorAll("#modeseg button").forEach(x=>x.classList.remove("on"));
   b.classList.add("on"); S.mode=b.dataset.mode; stop(); S.week=0;
   if(S.mode==="forward"){ S.refLines.Astar=null; buildForward(); }
@@ -2362,7 +2362,7 @@ document.querySelectorAll("#modeseg button").forEach(b=>b.addEventListener("clic
 
 document.getElementById("playbtn").addEventListener("click",play);
 document.getElementById("scrub").addEventListener("input",e=>{ stop(); S.week=+e.target.value; if(S.res) renderFrame(); });
-document.querySelectorAll("#overlays .o").forEach(b=>b.addEventListener("click",()=>{
+document.querySelectorAll("#overlays .o").forEach(b=>b.addEventListener("click", ()=>{
   const k=b.dataset.ov; S.overlays[k]=!S.overlays[k]; b.classList.toggle("on",S.overlays[k]);
   if(S.res) drawChart(S.week);
 }));
@@ -2415,7 +2415,7 @@ function placeTip(p){
   nodetip.style.transform=(p.y<70?"translate(-50%,16%)":"translate(-50%,-114%)");
 }
 function clearHover(){ if(S.hoverNode!==null){ S.hoverNode=null; S.hoverType="core"; S._tipKey=null; if(S.res) drawChart(S.week); } nodetip.classList.remove("on"); }
-netcv.addEventListener("mousemove",(e)=>{
+netcv.addEventListener("mousemove", (e)=>{
   if(!S.res){ return; }
   const rect=netcv.getBoundingClientRect(), cssW=netcv.clientWidth||760;
   const mx=(e.clientX-rect.left)*(cssW/rect.width), my=(e.clientY-rect.top)*(NET_H/rect.height);
@@ -2442,7 +2442,7 @@ netcv.addEventListener("mousemove",(e)=>{
 netcv.addEventListener("mouseleave",clearHover);
 
 let rt=null;
-window.addEventListener("resize",()=>{ clearTimeout(rt); rt=setTimeout(()=>{
+window.addEventListener("resize", ()=>{ clearTimeout(rt); rt=setTimeout(()=>{
   if(S.res){ const pc=S.res.layout&&S.res.layout.pool?S.res.layout.pool.length:0;
     S.res.layout=buildLayout(S.res.model, netcv.clientWidth||760, NET_H, pc); renderFrame(); }
 },150); });
