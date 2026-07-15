@@ -1,11 +1,11 @@
-# Participation Diffusion Dynamics Model Explorer
+# Diffusion Model Analyst and Pathfinder
 
-**Diffusion Model Explorer** is an interactive browser simulator for modeling how participation spreads, stabilizes, or collapses in a high-school club. It accompanies the paper *Participation Diffusion Dynamics in Influence-Driven Networks* and turns the paper’s agent-based diffusion model into a visual, explorable system.
+**Diffusion Model Analyst and Pathfinder** is an interactive browser simulator for modeling how participation spreads, stabilizes, or collapses in a high-school club. It accompanies the paper *Participation Diffusion Dynamics in Influence-Driven Networks* and turns the paper’s agent-based diffusion model into a visual, explorable system.
 
 The simulator runs entirely in the browser as a single HTML file. There are no dependencies, no build step, and no server required.
 
 ***Link:***
-[Diffusion Model Explorer](https://hgd-dev.github.io/Diffusion-Model-Explorer/)
+[Diffusion Model Analyst and Pathfinder](https://hgd-dev.github.io/Diffusion-Model-Analyst-and-Pathfinder/)
 
 ## Features
 
