@@ -391,11 +391,22 @@
                 gap: 7px;
                 margin-top: 4px
             }
+            .evhead,
             .ev {
                 display: grid;
-                grid-template-columns: 1fr 1fr auto;
-                gap: 7px;
+                grid-template-columns: 54px 64px minmax(74px, 1fr) minmax(74px, 1fr) 30px;
+                gap: 6px;
                 align-items: center
+            }
+            .evhead {
+                padding: 0 7px;
+                color: var(--ink3);
+                font: 600 9px var(--mono);
+                letter-spacing: .06em;
+                text-transform: uppercase
+            }
+            .evhead span:last-child {
+                visibility: hidden
             }
             .ev .mini {
                 display: flex;
@@ -407,9 +418,11 @@
                 padding: 5px 7px
             }
             .ev .mini span {
-                font: 600 10px var(--mono);
+                display: none
+            }
+            .ev .mini input::placeholder {
                 color: var(--ink3);
-                text-transform: uppercase
+                opacity: .8
             }
             .ev input {
                 width: 100%;
@@ -432,6 +445,22 @@
             .ev .del:hover {
                 color: var(--bad);
                 border-color: var(--bad)
+            }
+            @media(max-width:520px) {
+                .evhead {
+                    display: none
+                }
+                .ev {
+                    grid-template-columns: 1fr 1fr 30px;
+                }
+                .ev .mini:nth-child(3),
+                .ev .mini:nth-child(4) {
+                    grid-column: span 1
+                }
+                .ev .mini span {
+                    display: inline;
+                    flex: none
+                }
             }
             details.adv {
                 margin-top: 6px;
@@ -1534,8 +1563,22 @@
                         G = this.G,
                         r = this.R;
                     const events = ctrl.events || [];
-                    const gv = ctrl.gv ?? 1;
-                    const K = ctrl.K ?? 1e9;
+                    const baselineGv = ctrl.gv ?? 1;
+                    const baselineK = ctrl.K ?? 1e9;
+                    const eventWeek = events.filter(ev => ev.week === week);
+                    const eventGv = eventWeek
+                        .filter(ev => ev.gv != null && ev.gv !== "")
+                        .map(ev => +ev.gv)
+                        .filter(Number.isFinite);
+                    const eventK = eventWeek
+                        .filter(ev => ev.K != null && ev.K !== "")
+                        .map(ev => +ev.K)
+                        .filter(Number.isFinite);
+                    // The equations are unchanged. Only the exogenous controls become
+                    // time-dependent: an explicit event-week value overrides the baseline.
+                    // If multiple events share a week, the largest explicit override is used.
+                    const gv = eventGv.length ? Math.max(...eventGv) : baselineGv;
+                    const K = eventK.length ? Math.max(...eventK) : baselineK;
                     const scaff = ctrl.scaff || null;
                     // Store the period-t state so each recorded snapshot is aligned
                     // with the period-t actions and realized participation.
@@ -1741,7 +1784,9 @@
                         act: stateAtT.act,
                         alpha: alpha.slice(),
                         Phi: stateAtT.Phi,
-                        omega: stateAtT.omega
+                        omega: stateAtT.omega,
+                        gv,
+                        K
                     };
                 }
             }
@@ -1967,6 +2012,8 @@
                         ampCap: 0.6,
                         gvCap: 4.0,
                         Kceil: 20,
+                        eventGvCap: 8.0,
+                        eventKceil: 80,
                         scaffAllow: true
                     },
                     res: null, // {snaps, model, layout}
@@ -2064,7 +2111,9 @@
                         ctrl: {
                             events: c.events.map(e => ({
                                 week: Math.max(0, +e.week - 1),
-                                amp: +e.amp
+                                amp: +e.amp,
+                                gv: e.gv == null || e.gv === "" ? null : +e.gv,
+                                K: e.K == null || e.K === "" ? null : +e.K
                             })),
                             gv: +c.gv,
                             K: +c.K,
@@ -2084,7 +2133,9 @@
                     const c = Object.assign(base, JSON.parse(JSON.stringify(planCfg || {})));
                     c.events = (c.events || []).map(e => ({
                         week: +e.week,
-                        amp: +e.amp
+                        amp: +e.amp,
+                        gv: e.gv == null || e.gv === "" ? null : +e.gv,
+                        K: e.K == null || e.K === "" ? null : +e.K
                     }));
                     c.seed = (+c.seed || SEED);
                     c.n = +(c.n || base.n || 36);
@@ -2221,8 +2272,10 @@
                     event: 1.0,
                     amp: 2.2,
                     gv: 0.9,
+                    eventGv: 0.55,
                     scaff: 1.4,
                     capacity: 0.0,
+                    eventCapacity: 0.015,
                     K0: 14
                 };
 
@@ -2231,6 +2284,14 @@
                     k += COST.event * c.events.length;
                     k += COST.amp * c.events.reduce((s, e) => s + (+e.amp), 0);
                     k += COST.gv * Math.max(0, (+c.gv) - 1);
+                    k += COST.eventGv * c.events.reduce(
+                        (s, e) => s + Math.max(0, +(e.gv ?? c.gv) - (+c.gv)),
+                        0
+                    );
+                    k += COST.eventCapacity * c.events.reduce(
+                        (s, e) => s + Math.max(0, +(e.K ?? c.K) - (+c.K)),
+                        0
+                    );
                     if (c.scaffOn) {
                         k += COST.scaff * Math.max(0, (+c.gB) - 1) * Math.max(1, (+c.scaffB - +c.scaffA + 1));
                     }
@@ -2246,7 +2307,9 @@
                             week: 1 + Math.round(
                                 k * Math.min(rev.T - 2, 12) / Math.max(1, m)
                             ),
-                            amp: rev.ampCap
+                            amp: rev.ampCap,
+                            gv: Math.max(rev.gvCap, rev.eventGvCap),
+                            K: Math.max(rev.Kceil, rev.eventKceil)
                         });
                     }
                     return {
@@ -2294,7 +2357,9 @@
                     if (m === 1) {
                         c.events.push({
                             week: endWeek,
-                            amp: rev.ampCap
+                            amp: rev.ampCap,
+                            gv: Math.max(rev.gvCap, rev.eventGvCap),
+                            K: Math.max(rev.Kceil, rev.eventKceil)
                         });
                     }
                     else if (m > 1) {
@@ -2304,7 +2369,9 @@
                                     startWeek +
                                     k * (endWeek - startWeek) / (m - 1)
                                 ),
-                                amp: rev.ampCap
+                                amp: rev.ampCap,
+                                gv: Math.max(rev.gvCap, rev.eventGvCap),
+                                K: Math.max(rev.Kceil, rev.eventKceil)
                             });
                         }
                     }
@@ -2428,6 +2495,28 @@
                                     c = trial;
                                     improved = true;
                                 }
+                            }
+                            for (let k = 0; k < c.events.length; k++) {
+                                const current = +(c.events[k].gv ?? c.gv);
+                                if (current <= +c.gv + 1e-9) continue;
+                                const trial = JSON.parse(JSON.stringify(c));
+                                const next = +(current - 0.25).toFixed(2);
+                                trial.events[k].gv = next <= +trial.gv ? null : next;
+                                if (ok(trial)) {
+                                    c = trial;
+                                    improved = true;
+                                }
+                            }
+                            for (let k = 0; k < c.events.length; k++) {
+                                const current = +(c.events[k].K ?? c.K);
+                                if (current <= +c.K + 1e-9) continue;
+                                const trial = JSON.parse(JSON.stringify(c));
+                                const next = Math.max(+trial.K, current - 2);
+                                trial.events[k].K = next <= +trial.K ? null : next;
+                                if (ok(trial)) {
+                                    c = trial;
+                                    improved = true;
+                                }
                             } {
                                 const trial = JSON.parse(JSON.stringify(c));
                                 trial.gv = +(trial.gv - 0.25).toFixed(2);
@@ -2458,7 +2547,7 @@
                                     improved = true;
                                 }
                             }
-                            // Reduce capacity only when doing so strictly lowers the stated cost.
+                            // Preserve the original baseline-capacity cost treatment.
                             if (COST.capacity > 0 && c.K > COST.K0) {
                                 const trial = JSON.parse(JSON.stringify(c));
                                 trial.K = Math.max(
@@ -2523,14 +2612,26 @@
                     for (let r = 0; r < 5 && simCount < simBudget; r++) {
                         const pert = JSON.parse(JSON.stringify(best));
                         pert.gv = Math.min(rev.gvCap, +(pert.gv + searchRng() * 0.8).toFixed(2));
-                        pert.events.forEach(e => e.amp = Math.min(rev.ampCap, +(e.amp + searchRng() * 0.12).toFixed(2)));
+                        pert.events.forEach(e => {
+                            e.amp = Math.min(rev.ampCap, +(e.amp + searchRng() * 0.12).toFixed(2));
+                            e.gv = Math.max(
+                                pert.gv,
+                                Math.min(rev.eventGvCap, +((e.gv ?? pert.gv) + searchRng() * 0.5).toFixed(2))
+                            );
+                            e.K = Math.max(
+                                pert.K,
+                                Math.min(rev.eventKceil, Math.round((e.K ?? pert.K) + searchRng() * 12))
+                            );
+                        });
                         if (pert.scaffOn) pert.gB = Math.min(2.0, +(pert.gB + searchRng() * 0.3).toFixed(2));
                         if (searchRng() < 0.4 && pert.events.length < rev.maxEvents)
                             pert.events.push({
                                 week: 1 + Math.floor(
                                     searchRng() * Math.max(1, rev.T - 1)
                                 ),
-                                amp: rev.ampCap * 0.6
+                                amp: rev.ampCap * 0.6,
+                                gv: Math.max(rev.gvCap, rev.eventGvCap),
+                                K: Math.max(rev.Kceil, rev.eventKceil)
                             });
                         if (!ok(pert)) continue;
                         const cand = descend(pert);
@@ -2561,9 +2662,14 @@
                         const wk = ev.map(e => "week " + e.week).join(", ");
                         const amp = mean(ev.map(e => +e.amp));
                         const intensity = amp < 0.3 ? "a low-key" : amp < 0.5 ? "a solid" : "a high-energy";
+                        const resources = ev.map(e =>
+                            `wk ${e.week}: amp ${(+e.amp).toFixed(2)}, ` +
+                            `visibility ${e.gv == null ? "baseline" : (+e.gv).toFixed(1) + "×"}, ` +
+                            `K ${e.K == null ? "baseline" : Math.round(+e.K)}`
+                        ).join("; ");
                         steps.push({
                             h: `Run ${ev.length} signature event${ev.length>1?"s":""}`,
-                            t: `Schedule ${intensity} push in ${wk}. These are kickoffs, showcases, or socials that pull people in the door and reset enthusiasm (external reinforcement pulse, amplitude ≈ ${amp.toFixed(2)}).`
+                            t: `Schedule ${intensity} push in ${wk}. Each event's amplitude controls its decaying reinforcement pulse; event visibility and capacity apply only in that event week. ${resources}.`
                         });
                     }
                     else {
@@ -2593,8 +2699,8 @@
                         });
                     }
                     steps.push({
-                        h: `Use capacity scale K ≈ ${c.K}`,
-                        t: `K is the model's smooth congestion scale. A larger K directly reduces current-period capacity attenuation, but terminal outcomes need not be monotone in K because realized participation also changes commitment, fatigue, reinforcement, and turnover. The planner therefore tests several admissible K values. The present cost specification assigns no direct cost to capacity.`
+                        h: `Use baseline capacity scale K ≈ ${c.K}`,
+                        t: `This baseline K applies in ordinary weeks. An event-specific K, when present, replaces it only during that event week. Both use the same smooth congestion equation. The original planner treatment of baseline capacity is preserved, while additional event-only capacity is priced separately.`
                     });
                     // bistability / outcome framing
                     const term = terminalA(res.snaps),
@@ -3299,7 +3405,9 @@
                         for (const e of cfg.events) {
                             const tau = +e.week - 1;
                             if (tau <= t) {
-                                ev += (+e.amp) * Math.exp(-(t - tau) / 2.5);
+                                const eventVis = e.gv == null ? +cfg.gv : +e.gv;
+                                ev += (+e.amp) * (0.75 + 0.25 * eventVis) *
+                                    Math.exp(-(t - tau) / 2.5);
                             }
                         }
                         const drawn = snaps[t].A * perAttendee + ev * evPer;
@@ -3710,13 +3818,18 @@
 
                 function eventEditorHTML(events) {
                     let h = '<div class="events" id="eventlist">';
+                    h += '<div class="evhead"><span>wk</span><span>amp</span><span>visibility</span><span>capacity K</span><span>remove</span></div>';
                     events.forEach((e, i) => {
+                        const gv = e.gv == null ? "" : e.gv;
+                        const K = e.K == null ? "" : e.K;
                         h += `<div class="ev" data-i="${i}">
-      <div class="mini"><span>wk</span><input type="number" min="1" max="52" value="${e.week}" data-f="week"></div>
-      <div class="mini"><span>amp</span><input type="number" min="0" max="2" step="0.05" value="${e.amp}" data-f="amp"></div>
+      <div class="mini"><span>wk</span><input aria-label="event week" type="number" min="1" max="52" value="${e.week}" data-f="week"></div>
+      <div class="mini"><span>amp</span><input aria-label="event amplitude" type="number" min="0" max="2" step="0.05" value="${e.amp}" data-f="amp"></div>
+      <div class="mini"><span>vis</span><input aria-label="event visibility override" type="number" min="1" max="8" step="0.1" value="${gv}" placeholder="base" data-f="gv"></div>
+      <div class="mini"><span>K</span><input aria-label="event capacity override" type="number" min="2" max="500" step="1" value="${K}" placeholder="base" data-f="K"></div>
       <button class="del" title="remove">×</button></div>`;
                     });
-                    h += '</div><button class="chip" id="addev" style="margin-top:8px">+ add event</button>';
+                    h += '</div><div class="hint" style="margin-top:7px">Leave event visibility or capacity blank to use the baseline. An override applies only in that event week; if multiple events share a week, the largest explicit override is used.</div><button class="chip" id="addev" style="margin-top:8px">+ add event</button>';
                     return h;
                 }
 
@@ -3989,11 +4102,11 @@
     </div>
     <div class="panel">
       <h2><span class="dot"></span>Events &amp; momentum</h2>
-      <div class="hint">Kickoffs, showcases, socials — each gives a decaying enthusiasm pulse.</div>
+      <div class="hint">Kickoffs, showcases, socials — each gives a decaying enthusiasm pulse and may temporarily override baseline visibility or capacity in its event week.</div>
       ${eventEditorHTML(c.events)}
       <div style="margin-top:14px">
-        ${srow("Visibility&nbsp;γ<sub>v</sub>","gv",1,8,0.1, (+c.gv).toFixed(1),"(promotion)")}
-        ${srow("Capacity scale&nbsp;K","K",2,500,1,c.K,"(smooth congestion)")}
+        ${srow("Baseline visibility&nbsp;γ<sub>v</sub>","gv",1,8,0.1, (+c.gv).toFixed(1),"(ordinary weeks)")}
+        ${srow("Baseline capacity scale&nbsp;K","K",2,500,1,c.K,"(ordinary weeks)")}
       </div>
     </div>
     <div class="panel">
@@ -4042,7 +4155,7 @@
       ${srow("Bridge ties","routTies",0,50,0.5, (+r.outTies).toFixed(1),"(across groups)")}
       ${srow("Extra acquaintance ties","racquaint",0,2500,10,r.acquaint,"(global weak ties)")}
       ${srow("Illustrative public dots","rbody",0,3000,25,r.body,"(display only)")}
-      <div class="hint" style="margin-top:8px">These settings are held fixed while the planner searches over events, visibility, capacity, and optional mentoring. Larger networks and denser ties substantially increase planning time.</div>
+      <div class="hint" style="margin-top:8px">These settings are held fixed while the planner searches over event timing/amplitude, baseline visibility/capacity, per-event visibility/capacity, and optional mentoring. Larger networks and denser ties substantially increase planning time.</div>
     </div>
     ${initializationCardHTML(r,"r")}
     <div class="panel runpanel planrunpanel">
@@ -4065,8 +4178,11 @@
       <h2><span class="dot"></span>What you're willing to spend</h2>
       ${srow("Max events","maxEvents",0,12,1,r.maxEvents)}
       ${srow("Max event intensity","ampCap",0.1,1.5,0.05, (+r.ampCap).toFixed(2))}
-      ${srow("Max visibility γ<sub>v</sub>","gvCap",1,8,0.1, (+r.gvCap).toFixed(1))}
-      ${srow("Room capacity ceiling","Kceil",2,500,1,r.Kceil)}
+      ${srow("Max baseline visibility γ<sub>v</sub>","gvCap",1,8,0.1, (+r.gvCap).toFixed(1))}
+      ${srow("Baseline capacity ceiling","Kceil",2,500,1,r.Kceil)}
+      ${srow("Max event visibility γ<sub>v,e</sub>","eventGvCap",1,8,0.1, (+r.eventGvCap).toFixed(1))}
+      ${srow("Event capacity ceiling K<sub>e</sub>","eventKceil",2,500,1,r.eventKceil)}
+      <div class="hint">The planner keeps baseline controls active in ordinary weeks and may assign separate visibility and capacity values to each event week.</div>
       <div class="row"><label class="toggle"><input type="checkbox" id="scaffAllow" ${r.scaffAllow?'checked':''}><span class="sw"></span>Allow early-weeks mentoring</label></div>
     </div>
     <div class="panel" id="planpanel" style="margin-top:11px">
@@ -4098,9 +4214,13 @@
                     document.querySelectorAll("#eventlist .ev").forEach(row => {
                         const wk = +row.querySelector('[data-f="week"]').value;
                         const amp = +row.querySelector('[data-f="amp"]').value;
+                        const gvRaw = row.querySelector('[data-f="gv"]').value.trim();
+                        const KRaw = row.querySelector('[data-f="K"]').value.trim();
                         evs.push({
                             week: wk,
-                            amp: amp
+                            amp: amp,
+                            gv: gvRaw === "" ? null : +gvRaw,
+                            K: KRaw === "" ? null : +KRaw
                         });
                     });
                     c.events = evs;
@@ -4183,7 +4303,9 @@
                         readForwardCfg();
                         S.cfg.events.push({
                             week: 4,
-                            amp: 0.3
+                            amp: 0.3,
+                            gv: null,
+                            K: null
                         });
                         S.dirty = true;
                         buildForward();
@@ -4309,6 +4431,8 @@
                     wireSrow("ampCap", v => (+v).toFixed(2), markPlanDirty);
                     wireSrow("gvCap", v => (+v).toFixed(1), markPlanDirty);
                     wireSrow("Kceil", null, markPlanDirty);
+                    wireSrow("eventGvCap", v => (+v).toFixed(1), markPlanDirty);
+                    wireSrow("eventKceil", null, markPlanDirty);
                     controls.querySelectorAll("#rregime button").forEach(b => b.addEventListener("click", () => {
                         controls.querySelectorAll("#rregime button").forEach(x => x.classList.remove("on"));
                         b.classList.add("on");
@@ -4363,6 +4487,8 @@
                     r.ampCap = +val("ampCap");
                     r.gvCap = +val("gvCap");
                     r.Kceil = +val("Kceil");
+                    r.eventGvCap = +val("eventGvCap");
+                    r.eventKceil = +val("eventKceil");
                     r.scaffAllow = document.getElementById("scaffAllow").checked;
                 }
 
@@ -4430,7 +4556,10 @@
         <ol class="steps">${steps}</ol>
         <div class="costrow">
           <div class="costcard"><div class="k">Events</div><div class="v">${out.config.events.length}</div></div>
-          <div class="costcard"><div class="k">Visibility</div><div class="v">${(+out.config.gv).toFixed(1)}×</div></div>
+          <div class="costcard"><div class="k">Baseline visibility</div><div class="v">${(+out.config.gv).toFixed(1)}×</div></div>
+          <div class="costcard"><div class="k">Baseline K</div><div class="v">${Math.round(+out.config.K)}</div></div>
+          <div class="costcard"><div class="k">Mean event visibility</div><div class="v">${out.config.events.length?mean(out.config.events.map(e=>+(e.gv??out.config.gv))).toFixed(1)+"×":"—"}</div></div>
+          <div class="costcard"><div class="k">Mean event K</div><div class="v">${out.config.events.length?Math.round(mean(out.config.events.map(e=>+(e.K??out.config.K)))):"—"}</div></div>
           <div class="costcard"><div class="k">Effort index</div><div class="v">${out.cost.toFixed(1)}</div></div>
         </div>
         <div class="note">${ins.frame} &nbsp;The run on the right shows this exact plan — scrub it to see how the network fills in.</div>`;
