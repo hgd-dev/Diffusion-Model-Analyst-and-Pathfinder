@@ -1,0 +1,576 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=0.9in]{geometry}
+\usepackage{mathtools,bm}
+\usepackage{array,enumitem,xcolor,colortbl, setspace}
+\usepackage{graphicx}%
+\usepackage{multirow}%
+\usepackage{amsmath,amssymb,amsfonts}%
+\usepackage{amsthm}%
+\usepackage{mathrsfs}%
+\usepackage[title]{appendix}%
+\usepackage{xcolor}%
+\usepackage{textcomp}%
+\usepackage{manyfoot}%
+\usepackage{booktabs}%
+\usepackage{algorithm}%
+\usepackage{algorithmicx}%
+\usepackage{algpseudocode}%
+\usepackage{listings}%
+\usepackage[hidelinks,hypertexnames=false]{hyperref}
+\setlist{nosep,leftmargin=1.4em}
+\newcommand{\clip}{\operatorname{clip}_{[0,1]}}
+\newcommand{\Real}{\mathbb{R}}
+\newcommand{\half}{\tfrac{1}{2}}
+\newcommand{\Nn}{\mathcal{N}}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\title{\textbf{State-Dependent Participation Diffusion on Adaptive Influence Networks}}
+\author{Hudson Dong\thanks{Class of 2027, Stuyvesant High School, 345 Chambers St, New York, NY 10282. Email: \texttt{hdong70@stuy.edu}}}
+\date{}
+\begin{document}
+\setstretch{1.1}
+\maketitle
+\begin{abstract}
+Many socially transmitted behaviors require recurrent action. Individuals may participate, suspend participation, return after an external stimulus, or leave as costs accumulate. These transitions occur in influence networks that may also change through interaction. Although standard threshold and cascade models capture exposure and activation, they rarely represent the internal states that govern persistence or the way influence changes through repeated interaction. In this paper, I develop a discrete-time agent-based model (ABM) of repeated participation in a weighted, directed, adaptive network. Each agent carries bounded latent states for motivation, commitment, and fatigue, with optional modulators for affect, saturation, and volatility. Participation and broadcasting follow probabilistic threshold responses. Motivation decays endogenously, with commitment slowing the decay and fatigue accelerating it. Realized participation then feeds back through internal reinforcement. Influence weights evolve through visibility and co-participation and are further affected by credibility and public signaling. The same state system also defines a constrained control problem over event timing and amplitude, visibility, and capacity. The control problem also permits temporary scaffolding during the early periods. A mean-field reduction shows how nonlinear reinforcement and state-dependent decay can generate multiple activity states and threshold-dependent transitions.
+
+ \end{abstract}
+
+\section{Introduction}
+Repeated participation is an integral part of a large class of diffusion processes. Individuals may disengage temporarily, return after renewed stimulation, or change their later participation in response to earlier outcomes. This pattern appears in voluntary organizations, including educational and civic groups. In each case, an observed action is temporary, but its consequences persist through experience and social influence to accumulate commitment or fatigue.
+
+Classical threshold and cascade models such as those in Granovetter (1978), Watts (2002), and Kempe et al. (2003) describe activation as a function of network exposure, either through deterministic thresholds or stochastic transmission events. Recent work has expanded this picture by allowing nonlinear adoption, heterogeneous resistance, and group-level interactions. Aiyappa et al. (2024) show that simple and complex contagion can emerge from a common cognitive mechanism, not from being imposed as separate model classes. Ferraz de Arruda et al. (2024) review contagion on higher-order networks. In those networks, group exposure can generate discontinuous transitions and multistability. Wan et al. (2025) identify a structural trade-off between reach and reinforcement. In their study, randomized ties extend exposure, while clustered ties supply repeated corroboration. The experimental work of Centola (2010) and Ugander et al. (2012) further shows that clustered reinforcement can accelerate the spread of effortful behavior, while the structural diversity of an individual’s neighborhood predicts subsequent engagement.
+
+Empirical studies also show that diffusion outcomes depend on network position and reinforcement history. Through a large randomized field experiment, Airoldi and Christakis (2024) demonstrate that the location of intervention targets changes the magnitude of social spillovers. Brady et al. (2021) find that positive social feedback increases the probability of future expressive behavior. Along the same line, Wang et al. (2026) show that peer influence decays with social distance, varies with network density, and eventually encounters saturation in dynamic adolescent networks. 
+
+Kairam et al. (2012) and Lally et al. (2010) are the first studies that connect persistence to early retention and repeated action. They argue that online groups with strong early internal engagement are more likely to survive, while repeated behavior under stable conditions can gradually acquire greater persistence. 
+
+Binary adoption models do not allow individuals to leave and later return. Models of individual persistence often hold the surrounding network fixed or leave it implicit. Adaptive-network models allow ties to change, but they do not always include the internal states that determine whether participation can continue. Intervention models also tend to focus on initial exposure or short-run activation, even when the practical goal is continued activity after the intervention ends. The resulting question is when temporary activation becomes self-maintaining participation. 
+
+The framework couples three forms of change. Motivation, commitment, and fatigue evolve as bounded individual states; participation and public signaling follow probabilistic threshold responses; and directed influence weights change through visibility, credibility, and repeated co-activity. External events, capacity, and scaffolding modify these transitions, while dropout and reactivation change which agents remain active. 
+
+For context, my model was prompted by personal experience: an observational contrast between two voluntary activities that followed different participation trajectories despite development under similar administrative conditions.\footnote{Specifically, this refers to two high school student clubs I founded and led: Stuylisthenics, a fitness-oriented initiative, and the Stuyvesant Composer Society, a group championing music creation. They followed nearly identical initiation, promotion, and management structures, but only Stuylisthenics gained enough social traction for survival while Stuyvesant Composer Society gradually became inactive.} One of them stabilized, but the other lost substantial activity after an initial period of interest. This contrast motivates me to investigate the mathematical distinction between exposure and persistence within a broader class of recurrent social processes.
+
+\section{Model Setup}
+\subsection{Agents, Time, and Behavioral Actions }
+Consider a population of $n$ agents on a weighted, directed network 
+\[
+G_t=(V,E,W_t).
+\]
+Here, time is discrete, \[t=0,1,\ldots,T-1.\]
+In the reported figures, displayed Week $w$ corresponds to model time $t=w-1$. An event labeled as occurring in displayed Week $w$ is applied during the transition from $t=w-1$ to $t=w$. Because actions are generated before the event input updates motivation, its first effect on participation appears in displayed Week $w+1$.  The edge $j\rightarrow i$ carries weight $\omega_{ij}(t)\in[0,1]$, which measures the effective influence of agent $j$ on agent $i$. Core state variables lie in $[0,1]$ and are projected onto this interval after every update. Let
+\[
+\sigma(x)=(1+e^{-x})^{-1}, \qquad
+[x]^+=\max(x,0), \qquad
+[x]^-=\max(-x,0),
+\]
+and let $\epsilon_0>0$ prevent division by zero.
+
+The state updates also use several exogenous inputs. The availability factor $c_i(t)\in [0,1]$ measures the share of an external event input that is accessible to agent $i$ in period $t$; $c_i(t)=0$ indicates no access, and $c_i(t)=1$ indicates full access. The quantity $T_i(t) \ge 0$ denotes the engagement opportunity available to agent $i$, such as usable time or task volume, while $\bar{y}_i>0$ places an individual cap on credited engagement. Therefore, realized engagement volume is 
+\[
+y_i(t)=\min\{T_i(t), \bar{y}_i\}\tilde{a}_i(t).
+\]
+The role-salience variable $s_i^{role}(t)\in[0,1]$ measures the importance of a formal or informal group role to agent $i$ and scales the extent to which socially reinforced participation contributes to commitment. Finally, $r^+(t)\in[0,1]$ is a population-level positive-narrative signal that summarizes favorable collective feedback, such as perceived progress or a positively evaluated group outcome, during period $t$.   
+
+Weighted neighbor participation is defined as: 
+\begin{equation*}
+\bar a_{N(i)}(t)=\frac{\sum_j \omega_{ij}(t)\tilde a_j(t)}{\sum_j\omega_{ij}(t)+\epsilon_0}.
+\end{equation*}
+Motivation entering the action rule is:
+\[
+\widehat{m}_i(t)=\clip\bigg[m_i(t)+\beta_E\Big(E_i(t)-\frac{1}{2}\Big)\bigg].
+\]
+
+Attendance and posting are noisy threshold responses:
+\begin{equation}\tag{1}\label{eq:actions}
+P^a_i(t)=\sigma\big(\kappa^a_i[\widehat m_i(t)-\theta^a_i]\big),\qquad
+P^p_i(t)=\sigma\big(\kappa^p_i[\widehat m_i(t)-\theta^p_i]\big).
+\end{equation}
+
+In the motivating implementation, $a_i(t)$ records attendance, while $p_i(t)$ records lower-cost broadcasting through posting. In stochastic simulations, I define both actions as Bernoulli draws conditional on active status:
+\[
+Z_i^a(t)\sim \text{Bernoulli}(P_i^a(t)),
+\qquad
+Z_i^p(t)\sim \text{Bernoulli}(P_i^p(t)),
+\]
+\[
+a_i(t)=act_i(t)Z_i^a(t),
+\qquad
+p_i(t)=act_i(t)Z_i^p(t).
+\]
+In deterministic expected-value mode,
+\[
+a_i(t)=act_i(t)P_i^a(t), \qquad p_i(t)=act_i(t)P_i^p(t).
+\]
+\subsection{Motivation, Commitment, Fatigue, and Reinforcement}
+
+Agent $i$’s peer input aggregates neighbors’ motivation, weighted by directed influence and sender propensity. The hyperbolic tangent limits individual contributions, while the denominator imposes diminishing responsiveness to total exposure. Sender strength and receiver susceptibility vary across agents, following the distinction emphasized by Aral and Walker (2012).
+
+\begin{equation}\tag{2}\label{eq:softsat}
+X_i(t)=\sum_j\omega_{ij}(t)b_j\tanh(\kappa_g m_j(t)),\qquad
+\tilde X_i(t)=\frac{X_i(t)}{1+\rho_i X_i(t)}.
+\end{equation}
+
+Motivation combines retained state with four contemporaneous inputs: peer transmission, externally generated stimulation, reinforcement from realized participation, and an idiosyncratic shock:
+\begin{equation}\tag{3}\label{eq:mot}
+m_i(t{+}1)=\clip\!\Big[(1-\alpha_i(t))m_i(t)+G(\Phi_i(t))\big(w_i^P(1-S_i(t))\tilde X_i(t)+c_i(t)R_i(t)+B_i(t)+\epsilon_i(t)\big)\Big],
+\end{equation}
+where
+\begin{equation*}
+G(\Phi)=1+\kappa_\Phi(1-2\Phi),\qquad \kappa_\Phi\in[0,1).
+\end{equation*}
+Without positive input, motivation decays. Peer reinforcement or an external pulse can raise it, while persistence depends on the commitment and fatigue accumulated during the response.  
+
+The effective decay rate is endogenous:
+\begin{equation}\tag{4}\label{eq:decay}
+\begin{aligned}
+\alpha_i(t)&=\clip\!\Big[\alpha_{0,i}\big(1-\eta_L(1-\kappa_{SL}S_i(t))L_i(t)\big)\big(1+\eta_F\hat F_i(t)\big)\Big],\\
+\hat F_i(t)&=\clip\!\big[F_i(t)+\kappa_{EF}(\half-E_i(t))\big].
+\end{aligned}
+\end{equation}
+
+Commitment lowers effective decay, fatigue raises it, and saturation weakens the protective effect of commitment. This multiplicative structure makes persistence depend jointly on commitment, fatigue, and saturation. 
+ 
+\subsection{Slow States and Reinforcement }
+
+Commitment and fatigue update toward behavior-dependent targets:
+\begin{equation}\tag{5}\label{eq:loyalty}
+\begin{aligned}
+L_i(t{+}1)=\clip\!\Big[L_i(t)+\lambda_L\big(&\phi_1\tilde a_i(t)+\phi_2s_i^{\mathrm{role}}(t)(1-\kappa_{SL}S_i(t))\bar a_{N(i)}(t)\\
+&+\phi_3\nu_R(E_i(t))r^+(t)-L_i(t)\big)\Big],
+\end{aligned}
+\end{equation}
+\begin{equation}\tag{6}\label{eq:fatigue}
+\begin{aligned}
+F_i(t{+}1)=\clip\!\Big[F_i(t)+\lambda_F\big(&\nu_F(E_i(t))\psi_1y_i(t)+\nu_F(E_i(t))\psi_2\bar a_{N(i)}(t)\\
+&+\psi_3(1-\tilde a_i(t))-F_i(t)\big)\Big],
+\end{aligned}
+\end{equation}
+where
+\[
+\nu_F(E)=1+\beta_F(\frac{1}{2}-E), \qquad
+\nu_R(E)=1-\beta_R(\frac{1}{2}-E),
+\]
+and
+\[
+0\le \beta_F, \beta_R \le 2.
+\]
+Realized participation, role salience, and positive collective feedback increase commitment. Engagement and social exposure increase fatigue, while inactivity moves fatigue toward $\psi_3$. Both states feed back into motivation through the decay rate in Equation (4). 
+
+External stimulation is modeled as a sequence of exponentially decaying event pulses: 
+\begin{equation}\tag{7}\label{eq:external}
+R_i(t)=\kappa_R(1-S_i(t))\nu_R(E_i(t))V^{ev}_i\sum_{k:\tau_k\le t} A_k e^{-\lambda_R(t-\tau_k)},
+\qquad \kappa_R=3.4.
+\end{equation}
+Here, $A_k$ sets pulse amplitude and $\lambda_R$ sets the decay rate; availability, affect, event visibility, and saturation scale the input received by each agent. 
+
+Internal reinforcement is positive and concave above the viability threshold $N_{min}$ and negative below it: 
+\begin{equation}\tag{8}\label{eq:internal}
+B_i(t)=\nu_R(E_i(t))
+\begin{cases}
+\gamma_B(t)\beta_i\big(1-e^{-\delta_i y_i(t)}\big)-\chi_i\mathbf 1_{\{y_i(t)=0\}}, & A(t)\ge N_{\min},\\[3pt]
+-\chi_i^{\mathrm{viab}}+[\gamma_B(t)-1]s_B, & A(t)<N_{\min},
+\end{cases}
+\end{equation}
+with
+\begin{equation*}
+y_i(t)=\min(T_i(t),\bar y_i)\tilde a_i(t),\qquad y_{i,{1/2}}=\frac{\ln 2}{\delta_i}.
+\end{equation*}
+Here $s_B>0$ is the additive support supplied when aggregate activity remains below the viability threshold. The multiplier $\gamma_B(t)$ equals one outside the scaffolding window. Scaffolding therefore strengthens productive reinforcement above quorum and offsets part of the viability penalty below quorum without amplifying that penalty.
+
+Centola (2010), Ugander et al. (2012), and Wan et al. (2025) suggests that effortful behaviors often depend on reinforcement from multiple social sources. The discontinuity at $N_{min}$ introduces a collective coordination threshold. Two states with similar individual motivation can generate different future trajectories if their realized aggregate activity falls on opposite sides of this boundary. The parameter $\beta_i$ controls the maximum reinforcement available to agent $i$, and the parameter $\delta_i$ controls the speed at which that maximum is approached.
+
+Since $y_{i,1/2}=\ln2/\delta_i$, smaller values of $\delta_i$ correspond to slower reinforcement and a higher engagement requirement.
+
+\subsection{Evolving Influence Network}
+Holme and Newman (2006) and Gross and Blasius (2008) suggest that models with jointly evolving node states and tie structure belong to the broader adaptive-network or co-evolutionary-network tradition. According to Holme and Saramäki (2012), the present formulation also relates to temporal-network models because the effective transmission structure changes across periods. The effective influence weight is factored into two components, visibility and persuasiveness. Visibility represents whether a sender’s action reaches a receiver, whereas persuasiveness represents the receiver’s response after exposure. This factorization separates transmission opportunity from source effectiveness:
+\begin{equation}\tag{9}\label{eq:omega}
+\omega_{ij}(t)=\clip\!\big[v_{ij}(t)s_{ij}(t)\big].
+\end{equation}
+Persuasiveness combines receiver-specific baseline trust, dyadic similarity, and sender credibility. Credibility is a moving function of accumulated commitment and recent realized participation. Credibility therefore combines accumulated commitment with recent participation:
+\begin{align}
+s_{ij}(t)&=\clip\big[ \zeta_i^0+\zeta_i^1\mathrm{sim}_{ij}+\zeta_i^2\mathrm{cred}_j(t)\big],\tag{10}\label{eq:persuade}
+\end{align}
+where
+\[
+\mathrm{cred}_j(t)=w_1^cL_j(t)+w_2^cH_j(t),\tag{11}\label{eq:cred}
+\]
+\[
+d_t=\min\{\Delta,t\},
+\]
+and
+\[
+H_j(t)=
+\begin{cases}
+0, & t=0, \\
+\frac{1}{d_t}\sum_{\tau=t-d_t}^{t-1}\tilde a_j(\tau) & t\ge1.
+\end{cases}
+\]
+Credibility at time $t$ uses $L_j(t)$ at most the preceding $\Delta$ realized-participation observations. After the period-$t$ state and participation history are updated, Equations (10)--(11) determine s$_{ij}(t)$ and $\omega_{ij}(t+1)$ for the next behavioral update.
+
+Visibility combines a persistent channel structure with an activity-dependent update. Repeated co-participation strengthens mutual exposure, while broadcasting raises the directed visibility of the sender. The channel-mixing term prevents simulated activity from erasing the exogenous exposure structure:
+\begin{equation}\tag{12}\label{eq:vmix}
+v_{ij}^{\mathrm{mix}}(t)=\pi_o\mathrm{online}_{ij}(t)+\pi_f\mathrm{offline}_{ij}(t),\qquad \pi_o+\pi_f=1,
+\end{equation}
+\[
+V_{j,\text{eff}}^{ex}(t)=\clip\big[\gamma_vV_{j,0}^{ex}\big]
+\]
+\begin{equation}\tag{13}\label{eq:vupdate}
+v_{ij}(t{+}1)=\clip\!\Big[(1-\mu)v_{ij}(t)+\mu\big(\eta_1\tilde a_i(t)\tilde a_j(t)+\eta_2V^{ex}_{j,\text{eff}}p_j(t)\big)+\mu_{\mathrm{mix}}\big(v_{ij}^{\mathrm{mix}}(t)-v_{ij}(t)\big)\Big].
+\end{equation}
+The visibility control changes the sender’s expressive reach without directly changing persuasiveness. Promotion therefore affects exposure, while sustained participation affects credibility and later influence.
+
+\subsection{Capacity, Turnover, and Modulating States}
+Realized participation is capacity-adjusted: 
+\[
+\widetilde{a}_i(t)=\frac{a_i(t)}{1+\frac{\sum_ja_j(t)}{K}}=a_i(t)\frac{K}{K+\sum_ja_j(t)}.
+\tag{14}
+\]
+Aggregate realized participation is
+\[
+A(t)=\sum_{i=1}^n\tilde{a}_i(t).
+\]
+This form makes aggregate realized participation approach $K$ smoothly as intended participation increases. Congestion therefore reduces the realized share of each intended action without imposing a hard cutoff. 
+
+In stochastic runs, $act_i(t)\in\{0,1\}$.  In deterministic expected-value runs, $act_i(t)\in[0,1]$ represents the expected active fraction:
+\[
+act_i(t+1)=act_i(t)e^{-h_i(t)}+[1-act_i(t)]P_i^{react}(t).
+\]
+Active members drop out with a proportional hazard,
+\begin{equation}\tag{15}\label{eq:hazard}
+h_i(t)=h_{0,i}e^{-\gamma_1m_i(t)-\gamma_2L_i(t)+\gamma_3F_i(t)},\qquad d_i(t)\sim\mathrm{Bernoulli}(1-e^{-h_i(t)}),
+\end{equation}
+and inactive members reactivate under events and neighbor activity:
+\begin{equation}\tag{16}\label{eq:react}
+P_i^{\mathrm{react}}(t)=1-e^{-\xi_1R_i(t)-\xi_2\bar a_{N(i)}(t)}.
+\end{equation}
+Motivation and commitment reduce dropout risk, while fatigue increases it. Event input and neighbor participation support reactivation. Together, the two processes allow agents to leave and return, and inactive agents no longer contribute participation or broadcasting signals. 
+
+Affect shifts action propensity and reinforcement, saturation reduces responsiveness under high social load, and stability scales the response to new input according to recent motivational variance. The core system is recovered by setting
+\[
+\beta_E=\beta_F=\beta_R=\kappa_{EF}=\kappa_\Phi=0
+\]
+and fixing
+\[
+S_i(t)=0
+\]
+for all agents and periods, for example by setting $S_i(0)=0$ and $\lambda_S=0$. These settings recover the core system; the reported experiments instead use the nonzero modulator parameters listed in the ODD specification. The modulating states evolve as follows:
+\begin{equation}\tag{17}\label{eq:emotion}
+E_i(t{+}1)=\clip\!\Big[(1-\lambda_E)E_i(t)+\lambda_E\bar E_i+\zeta_E[B_i(t)]_+-\zeta'_E[B_i(t)]_-+\kappa_E\xi_i^E(t)\Big].
+\end{equation}
+\begin{equation}\tag{18}\label{eq:saturation}
+\ell_i(t)=\sum_j\omega_{ij}(t),\qquad
+S_i(t{+}1)=\mathrm{act}_i(t)\Big[(1-\lambda_S)S_i(t)+\lambda_S\frac{\ell_i(t)}{\ell_i(t)+s_0}\Big].
+\end{equation}
+\begin{equation}\tag{19}\label{eq:stability}
+\begin{aligned}
+\bar m_i(t)&=(1-\lambda_v)\bar m_i(t{-}1)+\lambda_vm_i(t),\\
+\mathrm{var}_i(t)&=(1-\lambda_v)\mathrm{var}_i(t{-}1)+\lambda_v(m_i(t)-\bar m_i(t))^2,\\
+\Phi_i(t)&=\frac{1}{1+\kappa_{\text{var}}\mathrm{var}_i(t)}.
+\end{aligned}
+\end{equation}
+
+\subsection{Functional-Form Rationale}
+The logistic action map represents heterogeneous decision noise around an individual threshold. Its slope controls the transition from gradual response to near-deterministic activation. I use separate parameter sets for participation and broadcasting because the two actions differ in both cost and visibility. As the slope becomes sufficiently large, the probabilistic response approaches a hard-threshold model.
+
+The decay law combines commitment and fatigue multiplicatively: commitment reduces baseline decay, while fatigue raises the remaining rate. This positivity-preserving form creates a state-dependent interaction between persistence and depletion. An additive alternative would imply a different relationship between commitment and fatigue. 
+
+The reinforcement function imposes a minimum viable participation level, diminishing returns above it, and a penalty for nonparticipation.  The quorum switch can generate discontinuous changes in the aggregate dynamics. 
+
+The factorization $\omega_{ij}=v_{ij}s_{ij}$ distinguishes exposure opportunity from response strength. Structural channels and public signaling determine visibility whilst similarity, trust, and accumulated credibility determine persuasiveness. The two factors respond to different interventions. 
+
+The proportional-hazard specification permits temporary activity, dropout, and return within one model. Exit risk can be reduced by motivation and commitment, but fatigue increases it. The exponential form keeps the hazard positive. It also gives the coefficients a direct multiplicative interpretation. When all state elasticities equal zero, the model reduces to a constant-hazard process.
+
+\section{Analytical Structure and Model Implications}
+\subsection{Fixed-Point Structure}
+I use a homogeneous mean-field reduction to isolate the feedback that supports persistence. Assume that clipping is inactive, capacity does not bind, all agents remain active, and the network is fixed and regular. Suppress heterogeneity and random shocks, hold $E$, $S$, $\Phi$, and external input constant, and let all agents share common states $m$, $L$, and $F$. The two quorum branches are analyzed separately. The common participation probability is 
+\[
+q(m)=\sigma\Bigg(\kappa^a\bigg[m+\beta_E\Big(E-\frac{1}{2}\Big)-\theta^a\bigg]\Bigg).
+\]
+Since capacity does not bind, $\tilde{q}(m)=q(m)$. The steady-state commitment and fatigue levels become functions of $q(m)$:
+\[
+L^*(m)=\phi_1q(m)+\phi_2s^{role}(1-\kappa_{SL}S)q(m)+\phi_3\nu_R(E)r^+
+\]
+\[
+F^*(m)=\nu_F(E)\psi_1y(m)+\nu_F(E)\psi_2q(m)+\psi_3[1-q(m)],
+\]
+where
+\[
+y(m)=\bar{y}q(m)
+\]
+The reinforcement branch is selected according to whether $nq(m)\ge N_{min}$.
+
+Substitution into the endogenous decay law produces $\alpha^*(m)$. Define the total reinforcing drive
+\[
+D(m)=G(\Phi^*)\Big[w^P(1-S)\widetilde{X}(m)+cR+B(m)\Big].
+\]
+Substituting the steady-state expressions $L^*(m)$ and $F^*(m)$ into the motivation balance defines the scalar equilibrium-consistency map
+\[
+\mathcal{F}(m)=[1-\alpha^*(m)]m+D(m).
+\]
+Homogeneous interior fixed points satisfy
+\[\mathcal{F}(m^*)=m^*,\]
+or equivalently,
+\[
+\alpha^*(m^*)m^*=D(m^*).
+\]
+This scalar map locates the homogeneous equilibria. 
+When $\lambda_L<1$ or $\lambda_F<1$, commitment and fatigue remain dynamic variables. The condition
+\[
+|\mathcal{F}'(m^*)|<1
+\]
+therefore describes stability only in the scalar reduction. Stability of the full homogeneous system is determined by the Jacobian in $(m,L,F)$, augmented by the optional modulating states when they are active.
+
+With sufficiently strong nonlinear feedback, the residual
+\[
+H(m)=\mathcal{F}(m)-m
+\]
+can have three zeros, corresponding to low-, intermediate-, and high-activity equilibria. In the scalar reduction, the outer equilibria may be stable while the intermediate equilibrium is unstable.
+
+Multiple equilibria are more likely when the reduction in decay produced by commitment is sufficiently strong relative to the increase produced by participation-induced fatigue. Changes in $N_{min}$, reinforcement, decay, peer susceptibility, or visibility can eliminate the high-activity equilibrium or make it inaccessible from a given initial condition. A smooth quorum gate may produce a saddle-node bifurcation, whereas the hard quorum rule used here can produce a discontinuity-induced transition. Collapse and persistence therefore depend on the resulting equilibrium geometry. 
+
+Chiba-Okabe and Plotkin (2024) likewise show that complex-contagion mechanisms can qualitatively alter equilibrium structure and generate bistability in social-learning systems.
+
+\subsection{Parameter Regimes}
+The same dynamical system supports both collapse-prone and persistent regimes. A collapse-prone regime may combine rapid baseline decay, a low reinforcement ceiling, limited visibility, and a large viability requirement. Under these conditions, temporary exposure often disappears before commitment or fatigue changes enough to support continued participation.
+
+Persistence becomes possible when the viability threshold is lower, reinforcement or peer transmission is stronger, or effective decay is slower. Even in this regime, a high-activity equilibrium may remain inaccessible from the initial state. The system reaches that equilibrium only if commitment accumulates enough to move the trajectory across the basin boundary.
+
+The effect of an intervention therefore depends on the regime and initial state. A pulse can produce durable participation by moving the system into the basin of a stable high-activity equilibrium; otherwise, its effect remains transient.
+
+\subsection{Theoretical Predictions and Limiting Cases}
+The model predicts hysteresis. A system with accumulated commitment can remain active at an activity level that would not sustain a newly initialized system. Two populations with the same current participation can therefore diverge because their commitment and fatigue histories differ. 
+
+Additional bridge ties expose the activity to more individuals, while clustered ties provide repeated signals within the same local network. Bridge ties are more valuable when reach is limiting; clustered ties are more valuable when repeated reinforcement is needed. Wan et al. (2025) report the same reach–reinforcement trade-off in complex-contagion diffusion. 
+
+Intervention effects also saturate. Expanding exposure initially increases the number of individuals who can be reached. However, the marginal effect becomes smaller once the reachable population or available capacity approaches saturation. Wang et al. (2026) likewise document influence decay and saturation under expanded targeting in empirically calibrated adolescent-network simulations. 
+
+Several restrictions connect the framework to classical diffusion models. Fixing the internal states and network weights, suppressing turnover, and taking the logistic slope to infinity yields a recurrent hard-threshold process analogous to Watts (2002). A one-shot stochastic exposure model with an absorbing active state similarly reduces to an Independent-Cascade-like process (Kempe et al., 2003). The full model relaxes these restrictions through continuous latent states, reversible activity, adaptive influence, congestion, and endogenous persistence.
+
+\section{Control and Computational Design}
+
+\subsection{Control and Feasibility}
+
+Because each intervention enters through a specified state channel, the model can be used to search for controls that sustain participation. Preciado et al. (2014) and  Nowzari et al. (2016) have studied control and constrained resource allocation for spreading processes in networked dynamical systems. The present formulation changes the objective from controlling one-time activation to sustaining recurrent participation after temporary inputs are withdrawn.Let $u$ collect event timing and intensity, visibility amplification, capacity, and temporary scaffolding. Given a terminal-window activity target, the planner searches the admissible control set $U$ for a feasible schedule with a low total cost. The planner varies the intervention variables while holding the behavioral equations fixed:
+\[
+\min_u C(u)
+\]
+is subject to the full transition system $(1)-(16)$, together with $(17)-(19)$ when the optional modulators are enabled.
+\[
+\overline A_{T-w:T-1}(u)=\frac1w\sum_{t=T-w}^{T-1}A(t)\ge A^*.
+\tag{20}
+\]
+In the current implementation, $\gamma_v$ and $K$ are constant within a candidate simulation run. Time dependence is retained for event input and temporary scaffolding. A representative additive cost is
+\[
+C(u)=\kappa_{E,0}N_E+\kappa_{E,1}\sum_{k=1}^{N_E} A_k+\kappa_v(\gamma_v-1)+\kappa_B\sum_{t}[\gamma_B(t)-1]+\kappa_K[K-K_0]_+.
+\]
+In the general formulation, $K$ is a control variable. In the reported implementation, $\kappa_K=0$, and capacity carries no direct cost. I still vary K over a bounded grid because its effect on terminal participation may not be monotonic. A larger capacity increases realized participation, but it may also change commitment, fatigue, reinforcement, and turnover in ways that affect later activity. For a user-specified ceiling $K_{\max}$, the implementation begins at $\min\{K_0,K_{\max\}}$ and increases capacity in increments of two. If this sequence does not end exactly at $K_{\max}$, the ceiling is also included as a separate candidate. 
+
+Events provide short-lived motivational input, scaffolding strengthens early reinforcement, visibility expands transmission, and capacity limits realized participation. The feasibility frontier is defined operationally by
+\[
+\underset{u\in\mathcal U}{\sup}\overline{A}_{T-w:T-1}(u).
+\]
+Any target above this supremum is infeasible under the stated control bounds. The current implementation uses a bounded heuristic search over $\mathcal{U}$. If the search finds no feasible schedule, it reports the best terminal-window performance among the tested candidates. 
+
+The heuristic searches one fixed deterministic realization, and the resulting configuration is evaluated separately over a randomized ensemble.
+
+The algorithm begins with three event-timing templates in which every event uses the maximum permitted amplitude. It then combines each template with every capacity value in the bounded grid described above. Under the default values $K_0=14$ and $K_{\max}=20$, the tested capacities are
+$K\in\{14,16,18,20\},$
+producing twelve starting configurations. All starting configurations use the permitted visibility ceiling and, when scaffolding is allowed, the initial scaffolding ceiling.
+
+If no starting configuration satisfies the target, the search stops and returns the best tested configuration as infeasible. The algorithm orders the feasible starting configurations by control cost, from lowest to highest. When two configurations have the same cost, the one with higher terminal-window participation is evaluated first. The algorithm then applies greedy control reduction to these starting configurations in the same order. All search paths share one global budget of 400 candidate-control evaluations. Hence, the budget may be exhausted before every feasible start receives a complete descent. When no immediate cost reduction remains, the algorithm tests neighboring event times. If part of the evaluation budget is still available, it also considers up to five seeded perturbation starts.
+
+The planner returns the lowest-cost feasible schedule encountered during the search. The Scenario C trajectory in Section 5.2 is a hand-specified rescue benchmark rather than an output of the heuristic planner.
+
+\subsection{Computational Design}
+The computational analysis has two parts: a parameter sweep over the viability threshold and visibility amplification, and an ensemble comparison of three participation trajectories. The trajectory comparison includes a collapse-prone baseline, a favorable persistent regime, and a finite-horizon rescue configuration. 
+
+Each simulation uses $n=36$ agents, 18 model periods $t=0, \ldots, 17$. I use deterministic expected-value actions and the same clustered directed-network generator across all reported scenarios.The simulations use the affect, saturation, and stability parameters specified in the accompanying ODD document. I set the idiosyncratic motivation shock to $\epsilon_i(t)=0$.
+
+The deterministic trajectories substitute conditional action probabilities and expected active fractions directly into the nonlinear transition equations; they are plug-in trajectories rather than expectations over stochastic action, dropout, and reactivation paths. 
+
+In Figure 1, all controls other than $N_{min}$ and $\gamma_v$ are held at the Scenario A settings. They include one event in displayed Week 3 with amplitude $0.60$, capacity $K=14$, and no scaffolding. Each cell uses the same sequence of $20$ seeds,
+\[
+q_r=11+9973r.
+\]
+Therefore, randomized networks, heterogeneous parameters, and initial states are paired across all cells in the heatmap.
+
+Scenario A uses the collapse-prone regime, one event in displayed Week 3 with amplitude $0.60$, no visibility amplification, capacity $K=14$, and no scaffolding. 
+
+Scenario B uses the favorable regime, events in displayed Weeks 3, 7, and 11 with amplitude $0.35$ each, visibility amplification $\gamma_v=1.4$, and capacity $K=18$. 
+
+Scenario C retains the collapse-prone regime and applies four events in displayed Weeks 2, 5, 8, and 12 with amplitude $0.45$ each, visibility amplification $\gamma_v=3.0$, capacity $K=20$, and scaffolding over displayed Weeks 2–9 with $\gamma_B=1.4$.
+
+\section{Results}
+
+\subsection{Viability and Visibility}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.75\linewidth]{Figure1_heatmap.pdf} \caption{Mean terminal participation as a function of the viability threshold $N_{min}$ and visibility amplification $\gamma_v$ in the collapse-prone regime. All cells use the Scenario A baseline controls of one event in displayed Week 3 with amplitude $0.60$, capacity $K=14$, and no scaffolding. Each cell reports the mean realized participation over the final four displayed weeks across 20 randomized realizations. The same seed sequence is used across cells to pair network, parameter, and initial-state realizations.} \label{fig:1}  
+\end{figure}
+
+Figure 1 shows a sharp viability-dependent transition. When $N_{min}\ge9$, terminal participation remains near the low-activity state across the tested visibility range. At intermediate thresholds, especially $N_{min}=5$ to $7$, greater visibility raises terminal participation, but the system remains below the high-activity range. When $N_{min}\le4$, terminal participation is substantially higher and changes little with further visibility amplification. 
+
+\subsection{Reference-Scenario Trajectories}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.75\linewidth]{Figure2_trajectories.pdf} \caption{Ensemble-mean realized-participation trajectories under a collapse-prone single-pulse baseline, a favorable persistent regime, and a hand-specified finite-horizon rescue configuration. The Scenario A curve is solid, the Scenario B curve is dashed, and the Scenario C curve is dash-dotted. The dotted horizontal line marks the terminal target $A^*=9$. Each scenario curve shows the mean across $R=250$ paired network, heterogeneous-parameter, and initial-state realizations. Scenario C satisfies the final-four-week target but is declining at the end of the simulation. } \label{fig:2}  
+\end{figure}
+
+\begin{table}[h]
+    \centering
+    \caption{Peak of the ensemble-mean trajectory, final-four-week mean, and Week-18 ensemble mean under the three reference scenarios\newline}
+    \begin{tabular}{|c|c|c|c|}
+    \hline
+         Scenario&  Peak of ensemble mean&  Final-four-week mean& Week-18 mean\\
+    \hline
+         A&  $8.0849$&  $0.1509$& $0.1213$\\
+    \hline
+         B&  $11.4536$&  $10.9940$& $10.6756$\\
+    \hline
+         C&  $12.4579$&  $11.1905$& $10.0749$\\
+    \hline
+    \end{tabular}
+\end{table}
+
+In Scenario A, the event temporarily raises the ensemble mean to approximately $8.08$ participants. However, participation quickly declines afterward, with a final-four-week mean of only $0.15$.
+
+Scenario B approaches a plateau near 11 participants and ends with a final-four-week mean of 10.99. 
+
+Scenario C reaches an ensemble-mean peak of approximately $12.46$. Its final-four-week mean is $11.19$, which exceeds the target $A^*=9$. The Week-18 mean remains approximately $10.07$. At that point, six displayed weeks have passed since the final event, and nine displayed weeks have passed since scaffolding ended.
+
+The three scenarios separate transient activation from sustained participation. The single-pulse baseline collapses, the favorable regime maintains a high-activity plateau, and the rescue configuration remains above the terminal target through Week 18. 
+
+\section{Discussion}
+
+\subsection{Mechanisms and Control Interpretation}
+
+Repeated participation emerges here from feedback between agent states, behavior, and network structure. Observable action changes latent commitment and fatigue; these states modify future decay, and realized interaction changes the influence network. These feedbacks distinguish temporary activation from participation that persists, collapses, or resumes after inactivity. 
+
+The main theoretical mechanism is the interaction between nonlinear reinforcement and endogenous decay. In the mean-field reduction, this interaction can produce multiple fixed points under suitable parameter conditions. The simulations show how changes in viability, reinforcement, and control can move the system between collapse and sustained activity. 
+
+The late decline in Scenario C suggests that the controls may sustain participation without moving the system fully into the high-activity basin. 
+
+The controls act through different mechanisms. Events provide short-lived input, scaffolding strengthens early reinforcement, visibility changes exposure, and capacity limits how much intended participation is realized. Effective intervention depends on which mechanism limits participation in the current regime.
+
+Trajectory shape can also indicate which mechanism is limiting participation. A brief peak followed by collapse suggests that motivation rose without enough commitment accumulating to slow later decay. High initial demand followed by weak persistence may indicate congestion. Participation concentrated within one cluster may indicate limited bridging or visibility. A stable core with little expansion suggests limited exposure beyond the existing cluster. Distinguishing these mechanisms empirically requires state and network measurements in addition to attendance. 
+
+\subsection{Data and Identification}
+
+Participation and broadcasting are observable, whereas motivation, commitment, and fatigue are latent. Member-level longitudinal data support a nonlinear state-space formulation. A particle filter could estimate the latent trajectories, with structural parameters fitted through an expectation-maximization procedure. With aggregate data alone, calibration would rely on simulated minimum distance or approximate Bayesian computation and would identify fewer mechanisms.
+
+Empirical calibration requires longitudinal data at the agent level. These data include realized participation, broadcasting activity, event timing, capacity, temporary exits, and returns. Repeated measures of perceived progress or fatigue would also help anchor the corresponding latent states.
+
+Identification depends on variation across agents and time. Variation in commitment histories separates baseline decay from commitment sensitivity, while exogenous variation in event timing separates external stimulation from endogenous reinforcement. Estimating dropout elasticities requires enough observed exits and returns. Visibility and persuasiveness require network observations or proxies such as co-participation, communication records, and peer nominations. 
+
+Aggregate data support regime classification but provide limited mechanism identification. Simulated minimum distance can match trajectory shape, peak timing, turnover, final activity, and reactivation delay. These summaries can distinguish transient, persistent, and collapse-prone regimes, but they do not separate a true quorum effect from nonlinear patterns created by unobserved exposure heterogeneity. St-Onge et al. (2024) show that unobserved exposure heterogeneity can make linear transmission appear as complex contagion at the aggregate level. An empirical test should therefore compare the quorum model with alternatives based on heterogeneous exposure.
+
+The numerical experiments illustrate the proposed mechanisms rather than estimate a particular population. Empirical validation would require fitting the latent states and structural parameters to longitudinal data, comparing alternative decay and reinforcement functions, and evaluating the fitted model out of sample. 
+
+\subsection{Ethical and Practical Constraints}
+
+Participation controls can distribute costs unevenly across agents. Agent-specific targeting may repeatedly rely on highly connected participants or concentrate activity within one subgroup. It may also increase fatigue among participants whose roles are difficult to replace. An agent-specific extension would therefore need bounds on individual load, event frequency, and fatigue, together with checks for subgroup concentration. 
+
+Parameter values are setting-specific. Reinforcement delay, viable group size, fatigue, and influence pathways depend on both the activity and the population. A calibrated parameter set therefore describes a specific population, activity, and observation period. Applying the model elsewhere requires recalibration and sensitivity analysis. 
+
+\section{Conclusion}
+
+The model’s central distinction is between immediate activation and the slower processes that sustain or erode participation. Motivation governs immediate action, commitment and fatigue alter its decay, and repeated behavior changes influence through visibility, credibility, and co-participation. 
+
+The resulting dynamics include collapse, persistence, and path dependence. The mean-field reduction links these outcomes to nonlinear reinforcement and state-dependent decay, while the simulations show that viability thresholds can dominate visibility gains and that temporary controls can sustain activity over the observed horizon. 
+
+The next step is to estimate the latent states from longitudinal participation and network data and test whether the predicted persistence thresholds appear in observed groups. 
+
+\subsubsection*{Disclosure of Interests.}
+The author has no competing interests to declare that are relevant to the content of this article.
+
+\section*{References}
+\bibliographystyle{plain}
+\begin{flushleft}\small
+\noindent\hangindent=0.5in \hangafter=1
+Airoldi, E. M., \& Christakis, N. A. (2024). Induction of social contagion for diverse outcomes in structured experiments in isolated villages. \textit{Science, 384}(6695), eadi5147. doi:10.1126/science.adi5147.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Aiyappa, R., Flammini, A., \& Ahn, Y.-Y. (2024). Emergence of simple and complex contagion dynamics from weighted belief networks. \textit{Science Advances, 10}, eadh4439. doi:10.1126/sciadv.adh4439.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Aral, S., \& Walker, D. (2012). Identifying influential and susceptible members of social networks. \textit{Science, 337}(6092), 337–341. doi:10.1126/science.1215842.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Brady, W. J., McLoughlin, K., Doan, T. N., \& Crockett, M. J. (2021). How social learning amplifies moral outrage expression in online social networks. \textit{Science Advances, 7}(33), eabe5641. doi:10.1126/sciadv.abe5641.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Centola, D. (2010). The spread of behavior in an online social network experiment. \textit{Science, 329}(5996), 1194–1197. doi:10.1126/science.1185231.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Chiba-Okabe, H., \& Plotkin, J. B. (2024). Social learning with complex contagion. \textit{Proceedings of the National Academy of Sciences, 121}(49), e2414291121. doi:10.1073/pnas.2414291121.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Ferraz de Arruda, G., Aleta, A., \& Moreno, Y. (2024). Contagion dynamics on higher-order networks. \textit{Nature Reviews Physics, 6}, 468–482. doi:10.1038/s42254-024-00733-0.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Granovetter, M. (1978). Threshold models of collective behavior. \textit{American Journal of Sociology, 83}(6), 1420–1443.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Gross, T., \& Blasius, B. (2008). Adaptive coevolutionary networks: A review. \textit{Journal of the Royal Society Interface, 5}(20), 259–271. doi:10.1098/rsif.2007.1229.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Holme, P., \& Newman, M. E. J. (2006). Nonequilibrium phase transition in the coevolution of networks and opinions. \textit{Physical Review E, 74}(5), 056108. doi:10.1103/PhysRevE.74.056108.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Holme, P., \& Saramäki, J. (2012). Temporal networks. \textit{Physics Reports, 519}(3), 97–125.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Kairam, S. R., Wang, D. J., \& Leskovec, J. (2012). The life and death of online groups: Predicting group growth and longevity. In \textit{Proceedings of the Fifth ACM International Conference on Web Search and Data Mining}, 673–682.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Kempe, D., Kleinberg, J., \& Tardos, É. (2003). Maximizing the spread of influence through a social network. In \textit{Proceedings of the Ninth ACM SIGKDD International Conference on Knowledge Discovery and Data Mining}, 137–146.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Lally, P., van Jaarsveld, C. H. M., Potts, H. W. W., \& Wardle, J. (2010). How are habits formed: Modelling habit formation in the real world. \textit{European Journal of Social Psychology, 40}(6), 998–1009.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Nowzari, C., Preciado, V. M., \& Pappas, G. J. (2016). Analysis and control of epidemics: A survey of spreading processes on complex networks. \textit{IEEE Control Systems Magazine, 36}(1), 26–46.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Preciado, V. M., Zargham, M., Enyioha, C., Jadbabaie, A., \& Pappas, G. J. (2014). Optimal resource allocation for network protection against spreading processes. \textit{IEEE Transactions on Control of Network Systems, 1}(1), 99–108.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+St-Onge, G., Hébert-Dufresne, L., \& Allard, A. (2024). Nonlinear bias toward complex contagion in uncertain transmission settings. \textit{Proceedings of the National Academy of Sciences, 121}(1), e2312202121. doi:10.1073/pnas.2312202121.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Ugander, J., Backstrom, L., Marlow, C., \& Kleinberg, J. (2012). Structural diversity in social contagion. \textit{Proceedings of the National Academy of Sciences, 109}(16), 5962–5966.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Wan, A., Riedl, C., \& Lazer, D. (2025). Diffusion of complex contagions is shaped by a trade-off between reach and reinforcement. \textit{Proceedings of the National Academy of Sciences, 122}(28), e2422892122. doi:10.1073/pnas.2422892122.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Wang, C., Butts, C. T., Hipp, J. R., \& Lakon, C. M. (2026). Peer influence decay and behavioral diffusion in adolescent networks: A simulation approach. \textit{Science, 392}(6797), 506–511. doi:10.1126/science.aea9297.
+
+\noindent\hangindent=0.5in \hangafter=1
+
+Watts, D. J. (2002). A simple model of global cascades on random networks. \textit{Proceedings of the National Academy of Sciences, 99}(9), 5766–5771.
+\end{flushleft}
+\end{document}
